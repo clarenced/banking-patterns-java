@@ -174,24 +174,25 @@ BankAccount account = factory.createAccount("Marie Martin", "marie@email.fr", "0
 1. Créez une interface `BankingPackageFactory` avec les méthodes :
    - `createAccount()`
    - `createTransactionProcessor()`
-   - `createFeeCalculator()`
+   - `createFeeCalculationStrategy()`
 2. Implémentez des packages concrets :
-   - `StandardBankingPackage` (clients particuliers)
-   - `PremiumBankingPackage` (clients premium)
-   - `BusinessBankingPackage` (clients professionnels)
-3. Chaque package crée des objets cohérents entre eux
+   - `StandardBankingPackage` (clients particuliers - frais standards)
+   - `PremiumBankingPackage` (clients premium - sans frais)
+   - `BusinessBankingPackage` (clients professionnels - frais réduits)
+3. Chaque package crée des objets cohérents entre eux (ex: compte premium + stratégie sans frais)
 
 **Exemple d'utilisation attendu** :
 ```java
 BankingPackageFactory packageFactory = new PremiumBankingPackage();
 BankAccount account = packageFactory.createAccount();
-FeeCalculator feeCalc = packageFactory.createFeeCalculator();
+FeeCalculationStrategy feeStrategy = packageFactory.createFeeCalculationStrategy(); // NoFeeStrategy pour premium
 ```
 
 **Critères de validation** :
 - Les objets créés sont cohérents entre eux
 - Facile de changer de package complet
 - Évite les incompatibilités entre composants
+- Réutilise les strategies déjà créées (pas de duplication)
 
 ---
 

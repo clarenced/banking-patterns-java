@@ -4,10 +4,11 @@
 
 ### Durée estimée
 - **Total** : 2-3 jours (16-24 heures)
-- **Partie 1 - Créationnels** : 6-8 heures
-- **Partie 2 - Structurels** : 4-6 heures
-- **Partie 3 - Comportementaux** : 4-6 heures
-- **Partie 4 - Nouvelles fonctionnalités** : 2-4 heures
+- **Partie 1 - Comportementaux** : 2-3 heures (Strategy)
+- **Partie 2 - Créationnels** : 5-7 heures (Builder, Factory, Abstract Factory)
+- **Partie 3 - Structurels** : 5-7 heures (Adapter, Facade, Decorator, Chain of Responsibility)
+- **Partie 4 - Patterns additionnels** : 3-5 heures (si temps disponible)
+- **Partie 5 - Nouvelles fonctionnalités** : 2-4 heures
 
 ### Niveau
 - Développeurs Java intermédiaires
@@ -30,7 +31,7 @@
 
 ## 📚 Déroulement recommandé
 
-### Jour 1 - Matin : Introduction et Patterns Créationnels
+### Jour 1 - Matin : Introduction et Pattern Strategy
 
 #### 1. Introduction (30 min)
 - Présentation du projet bancaire
@@ -38,9 +39,124 @@
 - Démonstration de l'application
 - Identification collective des problèmes
 
-**🎓 Point pédagogique** : Faites exécuter le code et demandez aux participants d'identifier au moins 5 problèmes majeurs.
+**🎓 Point pédagogique** : Faites exécuter le code et demandez aux participants d'identifier au moins 5 problèmes majeurs, notamment les if/else dans le calcul des frais.
 
-#### 2. Exercice 1 : Builder Pattern (1h30)
+**⚠️ Important** : Insistez sur le fait qu'on commence par Strategy car c'est le problème le plus visible et le plus facile à isoler dans le code legacy.
+
+---
+
+#### 2. Exercice 1 : Strategy Pattern (2h)
+
+**Problèmes à identifier** :
+```java
+// Dans BankingService.processTransaction() - lignes 120-134 et 179-187
+// CALCUL DE FRAIS EN DUR avec IF/ELSE
+double fees = 0;
+if (account.getAccountType().equals("COURANT")) {
+    if (amount > 1000) {
+        fees = 2.5;
+    }
+} else if (account.getAccountType().equals("EPARGNE")) {
+    fees = 1.0;
+} else if (account.getAccountType().equals("PROFESSIONNEL")) {
+    if (amount > 5000) {
+        fees = 5.0;
+    } else {
+        fees = 2.0;
+    }
+}
+```
+
+**Solution attendue** :
+
+```java
+public interface FeeCalculationStrategy {
+    double calculateFee(Transaction transaction);
+}
+
+public class CurrentAccountFeeStrategy implements FeeCalculationStrategy {
+    private static final double WITHDRAWAL_THRESHOLD = 1000.0;
+    private static final double HIGH_WITHDRAWAL_FEE = 2.5;
+    private static final double TRANSFER_FEE = 1.0;
+
+    @Override
+    public double calculateFee(Transaction transaction) {
+        switch (transaction.getType()) {
+            case "DEPOT":
+                return 0.0;
+            case "RETRAIT":
+                return transaction.getAmount() > WITHDRAWAL_THRESHOLD ?
+                       HIGH_WITHDRAWAL_FEE : 0.0;
+            case "VIREMENT":
+                return TRANSFER_FEE;
+            default:
+                return 0.0;
+        }
+    }
+}
+
+public class SavingsAccountFeeStrategy implements FeeCalculationStrategy {
+    private static final double WITHDRAWAL_FEE = 1.0;
+    private static final double TRANSFER_FEE = 2.5;
+
+    @Override
+    public double calculateFee(Transaction transaction) {
+        switch (transaction.getType()) {
+            case "DEPOT":
+                return 0.0;
+            case "RETRAIT":
+                return WITHDRAWAL_FEE;
+            case "VIREMENT":
+                return TRANSFER_FEE;
+            default:
+                return 0.0;
+        }
+    }
+}
+
+public class BusinessAccountFeeStrategy implements FeeCalculationStrategy {
+    private static final double LARGE_WITHDRAWAL_THRESHOLD = 5000.0;
+    private static final double LARGE_WITHDRAWAL_FEE = 5.0;
+    private static final double SMALL_WITHDRAWAL_FEE = 2.0;
+    private static final double TRANSFER_FEE = 0.5;
+
+    @Override
+    public double calculateFee(Transaction transaction) {
+        switch (transaction.getType()) {
+            case "DEPOT":
+                return 0.0;
+            case "RETRAIT":
+                return transaction.getAmount() > LARGE_WITHDRAWAL_THRESHOLD ?
+                       LARGE_WITHDRAWAL_FEE : SMALL_WITHDRAWAL_FEE;
+            case "VIREMENT":
+                return TRANSFER_FEE;
+            default:
+                return 0.0;
+        }
+    }
+}
+
+public class NoFeeStrategy implements FeeCalculationStrategy {
+    @Override
+    public double calculateFee(Transaction transaction) {
+        return 0.0; // Pour clients premium
+    }
+}
+```
+
+**🎓 Points à discuter** :
+- Élimination des if/else : Open/Closed Principle
+- Testabilité : chaque stratégie peut être testée indépendamment
+- Changement de stratégie à runtime (ex: promotion client vers premium)
+- **Très important** : ces stratégies seront réutilisées dans les exercices suivants (Abstract Factory, Chain of Responsibility)
+
+**💡 Astuce pédagogique** : Montrez les tests unitaires pour les frais (déjà présents dans BankingServiceTest) et comment ils valident que le refactoring ne casse rien.
+
+---
+
+### Jour 1 - Après-midi : Patterns Créationnels
+
+#### 3. Exercice 2 : Builder Pattern (1h30)
 
 **Problèmes à identifier** :
 ```java
@@ -145,7 +261,7 @@ public class BankAccount {
 
 ---
 
-#### 3. Exercice 2 : Factory Pattern (1h30)
+#### 4. Exercice 3 : Factory Pattern (1h30)
 
 **Solution attendue** :
 
@@ -252,16 +368,18 @@ public class BusinessAccountFactory implements AccountFactory {
 
 ---
 
-### Jour 1 - Après-midi : Suite Patterns Créationnels
+### Jour 1 - Après-midi (suite) : Abstract Factory
 
-#### 4. Exercice 3 : Abstract Factory (1h30)
+#### 5. Exercice 4 : Abstract Factory (1h30)
+
+**⚠️ Point clé** : L'Abstract Factory **réutilise** les `FeeCalculationStrategy` créées dans l'Exercice 1. C'est important pour montrer la cohésion entre les patterns !
 
 **Solution attendue** :
 
 ```java
 public interface BankingPackageFactory {
     BankAccount createAccount(String name, String email, String phone, double deposit);
-    FeeCalculator createFeeCalculator();
+    FeeCalculationStrategy createFeeCalculationStrategy();
     NotificationService createNotificationService();
 }
 
@@ -272,8 +390,9 @@ public class StandardBankingPackage implements BankingPackageFactory {
     }
 
     @Override
-    public FeeCalculator createFeeCalculator() {
-        return new StandardFeeCalculator();
+    public FeeCalculationStrategy createFeeCalculationStrategy() {
+        // Réutilise la stratégie de l'Exercice 1
+        return new CurrentAccountFeeStrategy();
     }
 
     @Override
@@ -289,8 +408,27 @@ public class PremiumBankingPackage implements BankingPackageFactory {
     }
 
     @Override
-    public FeeCalculator createFeeCalculator() {
-        return new NoFeeCalculator(); // Pas de frais pour premium
+    public FeeCalculationStrategy createFeeCalculationStrategy() {
+        // Les clients premium n'ont pas de frais !
+        return new NoFeeStrategy();
+    }
+
+    @Override
+    public NotificationService createNotificationService() {
+        return new MultiChannelNotificationService(); // Email + SMS
+    }
+}
+
+public class BusinessBankingPackage implements BankingPackageFactory {
+    @Override
+    public BankAccount createAccount(String name, String email, String phone, double deposit) {
+        return new BusinessAccountFactory().createAccount(name, email, phone, deposit);
+    }
+
+    @Override
+    public FeeCalculationStrategy createFeeCalculationStrategy() {
+        // Frais réduits pour les professionnels
+        return new BusinessAccountFeeStrategy();
     }
 
     @Override
@@ -301,13 +439,16 @@ public class PremiumBankingPackage implements BankingPackageFactory {
 ```
 
 **🎓 Points à discuter** :
-- Cohérence des familles de produits
-- Utilisation dans les applications multi-tenant
-- Différence avec Factory simple
+- **Cohérence des familles** : un package premium crée un compte ET une stratégie sans frais
+- **Réutilisation** : on ne crée pas de nouveau concept (FeeCalculator), on réutilise FeeCalculationStrategy
+- Différence avec Factory simple : ici on crée une **famille** d'objets cohérents
+- Utilisation pratique : changement de package client (standard → premium) change tout automatiquement
 
 ---
 
-#### 5. Exercice 4 : Singleton (1h)
+### Jour 2 - Matin : Patterns Structurels
+
+#### 6. Exercice 5 : Adapter Pattern (1h)
 
 **Solution attendue** :
 
@@ -374,7 +515,7 @@ public class BankingConfiguration {
 
 ---
 
-#### 6. Exercice 5 : Prototype (1h)
+#### 7. Exercice 6 : Facade Pattern (1h)
 
 **Solution attendue** :
 
@@ -439,9 +580,7 @@ public class AccountTemplateRegistry {
 
 ---
 
-### Jour 2 - Matin : Patterns Structurels
-
-#### 7. Exercice 6 : Adapter (1h)
+#### 8. Exercice 7 : Decorator Pattern (1h30)
 
 **Solution attendue** :
 
@@ -499,7 +638,9 @@ public class PaymentGatewayAdapter implements PaymentGateway {
 
 ---
 
-#### 8. Exercice 7 : Composite (1h30)
+### Jour 2 - Après-midi : Chain of Responsibility et révision
+
+#### 9. Exercice 8 : Chain of Responsibility Pattern (1h30)
 
 **Solution attendue** :
 
@@ -595,7 +736,11 @@ public class CompositeAccount implements AccountComponent {
 
 ---
 
-#### 9. Exercice 8 : Decorator (1h30)
+## 🔄 PATTERNS ADDITIONNELS (SI TEMPS DISPONIBLE)
+
+### Jour 3 - Patterns additionnels
+
+#### 10. Exercice 9 : Singleton Pattern (1h)
 
 **Solution attendue** :
 
@@ -704,9 +849,7 @@ public class NotificationAccountDecorator extends AccountDecorator {
 
 ---
 
-### Jour 2 - Après-midi : Facade + Patterns Comportementaux
-
-#### 10. Exercice 9 : Facade (1h)
+#### 11. Exercice 10 : Prototype Pattern (1h)
 
 **Solution attendue** :
 
@@ -1472,7 +1615,48 @@ public class BankingService {
 
 ---
 
-### Jour 3 - Après-midi : Nouvelles Fonctionnalités + Synthèse
+#### 12. Exercice 11 : Composite Pattern (1h30)
+
+_Solution déjà documentée ci-dessus - voir lignes précédentes_
+
+---
+
+#### 13. Exercice 12 : Template Method Pattern (1h30)
+
+_Solution déjà documentée ci-dessus - voir lignes précédentes_
+
+---
+
+#### 14. Exercice 13 : Observer Pattern (2h)
+
+_Solution déjà documentée ci-dessus - voir lignes précédentes_
+
+---
+
+## 📝 RÉSUMÉ DE L'ORDRE DES EXERCICES
+
+### ✅ Exercices principaux (Jour 1-2, ~16h)
+
+1. **Strategy** (2h) - Calcul des frais - *COMMENCE ICI*
+2. **Builder** (1h30) - Construction de BankAccount
+3. **Factory** (1h30) - Création de comptes
+4. **Abstract Factory** (1h30) - Packages bancaires (réutilise Strategy)
+5. **Adapter** (1h) - Intégration API externe
+6. **Facade** (1h) - Simplification de BankingService
+7. **Decorator** (1h30) - Fonctionnalités additionnelles
+8. **Chain of Responsibility** (1h30) - Validation des transactions
+
+### 🔄 Exercices additionnels (si temps, Jour 3, ~6h)
+
+9. **Singleton** (1h) - Configuration et générateurs d'ID
+10. **Prototype** (1h) - Templates de comptes
+11. **Composite** (1h30) - Comptes groupés
+12. **Template Method** (1h30) - Traitement des transactions
+13. **Observer** (2h) - Notifications
+
+---
+
+### Nouvelles Fonctionnalités + Synthèse (Jour 3)
 
 #### 15. Nouvelles fonctionnalités (2-3h)
 
@@ -1500,23 +1684,36 @@ Laissez les participants choisir parmi les fonctionnalités proposées et les im
 
 ## 🎓 Conseils pour l'instructeur
 
+### ⚠️ IMPORTANT : Cohérence entre les patterns
+
+**Point clé à expliquer** : Les patterns ne sont pas isolés, ils se réutilisent !
+
+- **Strategy (Exercice 1)** crée `FeeCalculationStrategy`
+- **Abstract Factory (Exercice 4)** RÉUTILISE `FeeCalculationStrategy` (pas de nouveau `FeeCalculator`)
+- **Chain of Responsibility (Exercice 8)** UTILISE aussi `FeeCalculationStrategy` dans `BalanceValidator`
+
+➡️ **Message pédagogique** : On ne crée pas de nouveaux concepts pour chaque pattern. On compose et réutilise ce qui existe déjà. C'est ça, la vraie architecture !
+
 ### Préparation
 1. Testez tous les exercices au préalable
 2. Préparez des branches Git avec les solutions
 3. Ayez des exemples de code alternatifs
+4. **Soulignez les réutilisations** entre patterns tout au long de la formation
 
 ### Pendant la formation
 1. **Encouragez la discussion** : les patterns sont subjectifs
 2. **Faites des live-coding** : montrez comment refactorer étape par étape
 3. **Adaptez le rythme** : certains participants iront plus vite
-4. **Utilisez les tests** : montrez que le refactoring ne casse rien
+4. **Utilisez les tests** : montrez que le refactoring ne casse rien (tests des frais inclus)
 5. **Code reviews** : examinez les solutions des participants
+6. **Montrez la progression** : Strategy → Abstract Factory montre comment les patterns se combinent
 
 ### Pièges courants à éviter
 1. **Over-engineering** : ne pas utiliser un pattern juste pour l'utiliser
 2. **Pattern obsession** : parfois, du code simple suffit
 3. **Refactoring brutal** : refactorer progressivement
 4. **Ignorer les tests** : toujours garder les tests verts
+5. **Duplication de concepts** : si `FeeCalculationStrategy` existe, ne créez pas `FeeCalculator` !
 
 ### Variantes possibles
 1. **Formation courte (1 jour)** : focus sur 6-8 patterns essentiels
