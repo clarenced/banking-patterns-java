@@ -19,7 +19,6 @@ public class BankingService {
     private int accountCounter = 1000;
     private int transactionCounter = 1;
 
-    // MÉTHODE HORRIBLE : Création de compte avec code dupliqué
     public BankAccount createAccount(String type, String name, String email, String phone, double initialDeposit) {
         String accountNumber = "ACC" + (accountCounter++);
 
@@ -65,7 +64,6 @@ public class BankingService {
         return account;
     }
 
-    // MÉTHODE HORRIBLE : Traitement de transaction avec logique imbriquée
     public boolean processTransaction(String type, String sourceAccount, String destinationAccount, double amount) {
         String txId = "TX" + (transactionCounter++);
         Transaction tx = new Transaction(txId, type, amount, sourceAccount, destinationAccount);
@@ -215,7 +213,6 @@ public class BankingService {
         return false;
     }
 
-    // MÉTHODE HORRIBLE : Génération de relevé bancaire
     public String generateStatement(String accountNumber) {
         BankAccount account = accounts.get(accountNumber);
         if (account == null) {
@@ -254,7 +251,6 @@ public class BankingService {
         return statement.toString();
     }
 
-    // MÉTHODE HORRIBLE : Calcul des intérêts (code dupliqué)
     public void applyInterest() {
         System.out.println("Application des intérêts...");
         for (BankAccount account : accounts.values()) {

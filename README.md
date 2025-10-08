@@ -74,9 +74,39 @@ mvn test
 
 ---
 
-## 🎨 PARTIE 1 : PATTERNS CRÉATIONNELS
+## ⚙️ PARTIE 1 : PATTERNS COMPORTEMENTAUX
 
-### Exercice 1 : Builder Pattern
+### Exercice 1 : Strategy Pattern
+
+**Problème identifié** : Le calcul des frais est en dur dans `processTransaction()` avec des if/else.
+
+**Objectif** : Extraire les stratégies de calcul de frais
+
+**Instructions** :
+1. Créez une interface `FeeCalculationStrategy` avec `calculateFee(Transaction)`
+2. Implémentez des stratégies concrètes :
+   - `CurrentAccountFeeStrategy`
+   - `SavingsAccountFeeStrategy`
+   - `BusinessAccountFeeStrategy`
+   - `NoFeeStrategy` (pour clients premium)
+3. Injectez la stratégie dans le compte ou le processeur de transaction
+
+**Exemple d'utilisation attendu** :
+```java
+FeeCalculationStrategy feeStrategy = new CurrentAccountFeeStrategy();
+double fees = feeStrategy.calculateFee(transaction);
+```
+
+**Critères de validation** :
+- Élimination des if/else pour les frais
+- Facile d'ajouter de nouvelles stratégies
+- Stratégie changeable à runtime
+
+---
+
+## 🎨 PARTIE 2 : PATTERNS CRÉATIONNELS
+
+### Exercice 2 : Builder Pattern
 
 **Problème identifié** : Le constructeur de `BankAccount` a trop de paramètres et n'est pas flexible.
 
@@ -106,7 +136,7 @@ BankAccount account = new BankAccount.Builder()
 
 ---
 
-### Exercice 2 : Factory Pattern
+### Exercice 3 : Factory Pattern
 
 **Problème identifié** : La logique de création des comptes dans `BankingService.createAccount()` est dupliquée et rigide.
 
@@ -134,7 +164,7 @@ BankAccount account = factory.createAccount("Marie Martin", "marie@email.fr", "0
 
 ---
 
-### Exercice 3 : Abstract Factory Pattern
+### Exercice 4 : Abstract Factory Pattern
 
 **Problème identifié** : Nous avons besoin de créer des familles de produits bancaires cohérentes.
 
@@ -165,59 +195,9 @@ FeeCalculator feeCalc = packageFactory.createFeeCalculator();
 
 ---
 
-### Exercice 4 : Singleton Pattern
+## 🏛️ PARTIE 3 : PATTERNS STRUCTURELS
 
-**Problème identifié** : Certains composants doivent être uniques (configuration, générateurs d'ID).
-
-**Objectif** : Créer des Singletons pour les ressources partagées
-
-**Instructions** :
-1. Créez un `TransactionIdGenerator` en Singleton (thread-safe)
-2. Créez un `BankingConfiguration` en Singleton pour les paramètres globaux
-3. Utilisez ces singletons dans le code
-
-**Exemple d'utilisation attendu** :
-```java
-String txId = TransactionIdGenerator.getInstance().generateId();
-double maxTransfer = BankingConfiguration.getInstance().getMaxTransferAmount();
-```
-
-**Critères de validation** :
-- Une seule instance existe
-- Thread-safe
-- Lazy initialization
-
----
-
-### Exercice 5 : Prototype Pattern
-
-**Problème identifié** : Création de comptes similaires ou templates de transactions.
-
-**Objectif** : Utiliser le Prototype pattern pour cloner des objets
-
-**Instructions** :
-1. Implémentez `Cloneable` dans `BankAccount`
-2. Créez une méthode `clone()` appropriée
-3. Créez un `AccountTemplateRegistry` qui stocke des prototypes de comptes
-4. Permettez la création de nouveaux comptes à partir de templates
-
-**Exemple d'utilisation attendu** :
-```java
-BankAccount template = templateRegistry.getTemplate("COMPTE_ETUDIANT");
-BankAccount newAccount = template.clone();
-newAccount.setCustomerName("Nouveau client");
-```
-
-**Critères de validation** :
-- Le clonage est profond (deep copy)
-- Les templates sont réutilisables
-- Simplification pour les comptes standards
-
----
-
-## 🏛️ PARTIE 2 : PATTERNS STRUCTURELS
-
-### Exercice 6 : Adapter Pattern
+### Exercice 5 : Adapter Pattern
 
 **Problème identifié** : Intégration avec des systèmes externes (API de paiement, services tiers).
 
@@ -242,38 +222,35 @@ boolean success = gateway.processPayment(account, amount);
 
 ---
 
-### Exercice 7 : Composite Pattern
+### Exercice 6 : Facade Pattern
 
-**Problème identifié** : Gestion de comptes groupés (comptes joints, comptes d'entreprise avec sous-comptes).
+**Problème identifié** : L'interface de `BankingService` est trop complexe et expose trop de détails.
 
-**Objectif** : Utiliser Composite pour gérer des hiérarchies de comptes
+**Objectif** : Créer une Facade simplifiée pour les opérations courantes
 
 **Instructions** :
-1. Créez une interface `AccountComponent` avec :
-   - `getBalance()`
-   - `addTransaction()`
-   - `generateStatement()`
-2. Implémentez :
-   - `SimpleAccount` (feuille)
-   - `CompositeAccount` (composite, contient d'autres comptes)
-3. Permettez de traiter un compte simple et un groupe de comptes de manière uniforme
+1. Créez une classe `BankingFacade` qui simplifie :
+   - Ouverture de compte complète (avec validation, notification, etc.)
+   - Transfert d'argent (avec toutes les vérifications)
+   - Clôture de compte (avec toutes les étapes)
+2. La facade coordonne les appels aux sous-systèmes
+3. Cache la complexité aux clients
 
 **Exemple d'utilisation attendu** :
 ```java
-CompositeAccount familyAccount = new CompositeAccount("Compte Famille");
-familyAccount.add(new SimpleAccount("Compte Parent 1"));
-familyAccount.add(new SimpleAccount("Compte Parent 2"));
-double totalBalance = familyAccount.getBalance(); // Somme des sous-comptes
+BankingFacade facade = new BankingFacade();
+BankAccount account = facade.openNewAccount("COURANT", "Jean", "jean@email.fr", 500.0);
+facade.transferMoney(account1, account2, 200.0); // Gère toute la complexité
 ```
 
 **Critères de validation** :
-- Traitement uniforme des comptes simples et composites
-- Navigation dans la hiérarchie
-- Opérations récursives fonctionnelles
+- Interface simple pour les cas d'usage courants
+- Coordination de plusieurs sous-systèmes
+- Réduction du couplage
 
 ---
 
-### Exercice 8 : Decorator Pattern
+### Exercice 7 : Decorator Pattern
 
 **Problème identifié** : Ajout dynamique de fonctionnalités aux comptes (assurance, alertes, cashback).
 
@@ -302,94 +279,7 @@ account.processTransaction(transaction); // Avec assurance ET cashback
 
 ---
 
-### Exercice 9 : Facade Pattern
-
-**Problème identifié** : L'interface de `BankingService` est trop complexe et expose trop de détails.
-
-**Objectif** : Créer une Facade simplifiée pour les opérations courantes
-
-**Instructions** :
-1. Créez une classe `BankingFacade` qui simplifie :
-   - Ouverture de compte complète (avec validation, notification, etc.)
-   - Transfert d'argent (avec toutes les vérifications)
-   - Clôture de compte (avec toutes les étapes)
-2. La facade coordonne les appels aux sous-systèmes
-3. Cache la complexité aux clients
-
-**Exemple d'utilisation attendu** :
-```java
-BankingFacade facade = new BankingFacade();
-BankAccount account = facade.openNewAccount("COURANT", "Jean", "jean@email.fr", 500.0);
-facade.transferMoney(account1, account2, 200.0); // Gère toute la complexité
-```
-
-**Critères de validation** :
-- Interface simple pour les cas d'usage courants
-- Coordination de plusieurs sous-systèmes
-- Réduction du couplage
-
----
-
-## ⚙️ PARTIE 3 : PATTERNS COMPORTEMENTAUX
-
-### Exercice 10 : Strategy Pattern
-
-**Problème identifié** : Le calcul des frais est en dur dans `processTransaction()` avec des if/else.
-
-**Objectif** : Extraire les stratégies de calcul de frais
-
-**Instructions** :
-1. Créez une interface `FeeCalculationStrategy` avec `calculateFee(Transaction)`
-2. Implémentez des stratégies concrètes :
-   - `CurrentAccountFeeStrategy`
-   - `SavingsAccountFeeStrategy`
-   - `BusinessAccountFeeStrategy`
-   - `NoFeeStrategy` (pour clients premium)
-3. Injectez la stratégie dans le compte ou le processeur de transaction
-
-**Exemple d'utilisation attendu** :
-```java
-FeeCalculationStrategy feeStrategy = new CurrentAccountFeeStrategy();
-double fees = feeStrategy.calculateFee(transaction);
-```
-
-**Critères de validation** :
-- Élimination des if/else pour les frais
-- Facile d'ajouter de nouvelles stratégies
-- Stratégie changeable à runtime
-
----
-
-### Exercice 11 : Template Method Pattern
-
-**Problème identifié** : Le traitement des transactions a toujours les mêmes étapes mais avec des variations.
-
-**Objectif** : Créer un Template Method pour le traitement des transactions
-
-**Instructions** :
-1. Créez une classe abstraite `TransactionProcessor` avec :
-   - `processTransaction()` (template method)
-   - Étapes abstraites : `validate()`, `executeTransaction()`, `notifyCustomer()`
-2. Implémentez des processeurs concrets :
-   - `DepositProcessor`
-   - `WithdrawalProcessor`
-   - `TransferProcessor`
-3. Chaque processeur implémente les étapes spécifiques
-
-**Exemple d'utilisation attendu** :
-```java
-TransactionProcessor processor = new WithdrawalProcessor();
-processor.processTransaction(transaction); // Suit le template défini
-```
-
-**Critères de validation** :
-- L'algorithme général est dans la classe de base
-- Les variations sont dans les sous-classes
-- Pas de code dupliqué
-
----
-
-### Exercice 12 : Chain of Responsibility Pattern
+### Exercice 8 : Chain of Responsibility Pattern
 
 **Problème identifié** : La validation des transactions a de multiples règles imbriquées.
 
@@ -421,6 +311,118 @@ ValidationResult result = chain.validate(transaction);
 - Chaque validateur a une seule responsabilité
 - Ordre des validations configurable
 - Facile d'ajouter de nouveaux validateurs
+
+---
+
+## 🔄 PARTIE 4 : PATTERNS ADDITIONNELS (SI TEMPS DISPONIBLE)
+
+### Exercice 9 : Singleton Pattern
+
+**Problème identifié** : Certains composants doivent être uniques (configuration, générateurs d'ID).
+
+**Objectif** : Créer des Singletons pour les ressources partagées
+
+**Instructions** :
+1. Créez un `TransactionIdGenerator` en Singleton (thread-safe)
+2. Créez un `BankingConfiguration` en Singleton pour les paramètres globaux
+3. Utilisez ces singletons dans le code
+
+**Exemple d'utilisation attendu** :
+```java
+String txId = TransactionIdGenerator.getInstance().generateId();
+double maxTransfer = BankingConfiguration.getInstance().getMaxTransferAmount();
+```
+
+**Critères de validation** :
+- Une seule instance existe
+- Thread-safe
+- Lazy initialization
+
+---
+
+### Exercice 10 : Prototype Pattern
+
+**Problème identifié** : Création de comptes similaires ou templates de transactions.
+
+**Objectif** : Utiliser le Prototype pattern pour cloner des objets
+
+**Instructions** :
+1. Implémentez `Cloneable` dans `BankAccount`
+2. Créez une méthode `clone()` appropriée
+3. Créez un `AccountTemplateRegistry` qui stocke des prototypes de comptes
+4. Permettez la création de nouveaux comptes à partir de templates
+
+**Exemple d'utilisation attendu** :
+```java
+BankAccount template = templateRegistry.getTemplate("COMPTE_ETUDIANT");
+BankAccount newAccount = template.clone();
+newAccount.setCustomerName("Nouveau client");
+```
+
+**Critères de validation** :
+- Le clonage est profond (deep copy)
+- Les templates sont réutilisables
+- Simplification pour les comptes standards
+
+---
+
+### Exercice 11 : Composite Pattern
+
+**Problème identifié** : Gestion de comptes groupés (comptes joints, comptes d'entreprise avec sous-comptes).
+
+**Objectif** : Utiliser Composite pour gérer des hiérarchies de comptes
+
+**Instructions** :
+1. Créez une interface `AccountComponent` avec :
+   - `getBalance()`
+   - `addTransaction()`
+   - `generateStatement()`
+2. Implémentez :
+   - `SimpleAccount` (feuille)
+   - `CompositeAccount` (composite, contient d'autres comptes)
+3. Permettez de traiter un compte simple et un groupe de comptes de manière uniforme
+
+**Exemple d'utilisation attendu** :
+```java
+CompositeAccount familyAccount = new CompositeAccount("Compte Famille");
+familyAccount.add(new SimpleAccount("Compte Parent 1"));
+familyAccount.add(new SimpleAccount("Compte Parent 2"));
+double totalBalance = familyAccount.getBalance(); // Somme des sous-comptes
+```
+
+**Critères de validation** :
+- Traitement uniforme des comptes simples et composites
+- Navigation dans la hiérarchie
+- Opérations récursives fonctionnelles
+
+---
+
+### Exercice 12 : Template Method Pattern
+
+**Problème identifié** : Le traitement des transactions a toujours les mêmes étapes mais avec des variations.
+
+**Objectif** : Créer un Template Method pour le traitement des transactions
+
+**Instructions** :
+1. Créez une classe abstraite `TransactionProcessor` avec :
+   - `processTransaction()` (template method)
+   - Étapes abstraites : `validate()`, `executeTransaction()`, `notifyCustomer()`
+2. Implémentez des processeurs concrets :
+   - `DepositProcessor`
+   - `WithdrawalProcessor`
+   - `TransferProcessor`
+3. Chaque processeur implémente les étapes spécifiques
+
+**Exemple d'utilisation attendu** :
+```java
+TransactionProcessor processor = new WithdrawalProcessor();
+processor.processTransaction(transaction); // Suit le template défini
+```
+
+**Critères de validation** :
+- L'algorithme général est dans la classe de base
+- Les variations sont dans les sous-classes
+- Pas de code dupliqué
 
 ---
 
@@ -505,9 +507,9 @@ Une fois le refactoring terminé, ajoutez les fonctionnalités suivantes en util
 2. ✅ Séparé les responsabilités (SRP)
 3. ✅ Rendu le code facilement extensible (OCP)
 4. ✅ Découplé les composants
-5. ✅ Appliqué au moins 13 design patterns
+5. ✅ Appliqué les 8 design patterns principaux (minimum)
 6. ✅ Maintenu les tests verts
-7. ✅ Ajouté au moins 3 nouvelles fonctionnalités
+7. ✅ Ajouté au moins 2 nouvelles fonctionnalités
 
 ---
 
