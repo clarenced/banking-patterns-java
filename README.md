@@ -280,183 +280,187 @@ account.processTransaction(transaction); // Avec assurance ET cashback
 
 ---
 
-### Exercice 8 : Chain of Responsibility Pattern
+### Exercice 8 : Command Pattern
+
+**Problème identifié** : Les transactions sont exécutées immédiatement sans possibilité d'annulation ou de rejeu.
+
+**Objectif** : Encapsuler les opérations bancaires en objets Command
+
+**Instructions** :
+1. Créez une interface `BankCommand` avec :
+   - `execute()`
+   - `undo()`
+   - `getDescription()`
+2. Implémentez des commandes concrètes :
+   - `DepositCommand`
+   - `WithdrawCommand`
+   - `TransferCommand` (macro command)
+3. Créez un `TransactionExecutor` (Invoker) qui maintient l'historique
+4. Permettez undo/redo des transactions
+
+**Exemple d'utilisation attendu** :
+```java
+TransactionExecutor executor = new TransactionExecutor();
+BankCommand deposit = new DepositCommand(account, 100);
+executor.execute(deposit);
+
+executor.undo(); // Annule le dépôt
+executor.redo(); // Refait le dépôt
+```
+
+**Critères de validation** :
+- Au moins 3 commandes concrètes
+- Undo/Redo fonctionnent correctement
+- TransferCommand utilise 2 commandes (macro)
+- CommandExecutor maintient l'historique
+
+---
+
+### Exercice 9 : State Pattern
+
+**Problème identifié** : La gestion des états du compte (ACTIVE, SUSPENDED, FROZEN, CLOSED) utilise des if/else.
+
+**Objectif** : Utiliser State pour gérer les différents états avec leurs comportements
+
+**Instructions** :
+1. Créez une interface `AccountState` avec :
+   - `canDeposit()`, `canWithdraw()`, `canTransfer()`
+   - `getWithdrawalLimit()`
+   - `handleStateTransition(BankAccount, String)`
+2. Implémentez des états concrets :
+   - `ActiveState` (toutes opérations autorisées)
+   - `SuspendedState` (retraits limités)
+   - `FrozenState` (aucune opération)
+   - `ClosedState` (compte fermé)
+3. Modifiez `BankAccount` pour utiliser les états
+
+**Exemple d'utilisation attendu** :
+```java
+BankAccount account = new BankAccount(...); // État ACTIVE
+account.withdraw(100); // OK
+
+account.changeState("SUSPEND");
+account.withdraw(1000); // Limité à 500 EUR
+
+account.changeState("FREEZE");
+account.withdraw(50); // Refusé
+```
+
+**Critères de validation** :
+- 4 états implémentés
+- Les comportements varient selon l'état
+- Les transitions d'état sont gérées correctement
+- Plus de `if (status.equals(...))` dans le code métier
+
+---
+
+### Exercice 10 : Composite Pattern
+
+**Problème identifié** : Gestion de comptes individuels et portefeuilles de comptes de manière différente.
+
+**Objectif** : Utiliser Composite pour traiter uniformément comptes simples et groupés
+
+**Instructions** :
+1. Créez une interface `AccountComponent` avec :
+   - `getBalance()`, `deposit()`, `withdraw()`
+   - `getAccountInfo()`
+   - `addChild()`, `removeChild()`, `getChildren()`
+2. Implémentez :
+   - `IndividualAccount` (feuille)
+   - `AccountPortfolio` (composite, contient d'autres comptes)
+3. Permettez de composer des portfolios de portfolios
+
+**Exemple d'utilisation attendu** :
+```java
+AccountComponent account1 = new IndividualAccount(...);
+AccountComponent account2 = new IndividualAccount(...);
+
+AccountComponent familyPortfolio = new AccountPortfolio("Famille Dupont");
+familyPortfolio.addChild(account1);
+familyPortfolio.addChild(account2);
+
+double totalBalance = familyPortfolio.getBalance(); // Somme des sous-comptes
+familyPortfolio.deposit(1000); // Répartit sur tous les comptes
+```
+
+**Critères de validation** :
+- Interface commune Component
+- Leaf (IndividualAccount) et Composite (Portfolio)
+- Possibilité de composer des portfolios de portfolios
+- Les opérations fonctionnent récursivement
+
+---
+
+### Exercice 11 : Chain of Responsibility Pattern
 
 **Problème identifié** : La validation des transactions a de multiples règles imbriquées.
 
-**Objectif** : Créer une chaîne de validateurs
+**Objectif** : Créer une chaîne de validateurs indépendants
 
 **Instructions** :
 1. Créez une interface `TransactionValidator` avec :
    - `setNext(TransactionValidator)`
-   - `validate(Transaction)`
+   - `validate(Transaction, BankingService)`
 2. Implémentez des validateurs concrets :
    - `AmountValidator` (montant positif et dans les limites)
    - `AccountExistsValidator`
    - `BalanceValidator` (solde suffisant)
    - `DailyLimitValidator`
-   - `AntifraudValidator`
-3. Chaînez les validateurs
+   - `FraudDetectionValidator`
+   - `AccountStateValidator` (utilise State pattern)
+3. Créez un `ValidationChainBuilder` pour construire la chaîne
 
 **Exemple d'utilisation attendu** :
 ```java
-TransactionValidator chain = new AmountValidator();
-chain.setNext(new AccountExistsValidator())
-     .setNext(new BalanceValidator())
-     .setNext(new AntifraudValidator());
+TransactionValidator chain = ValidationChainBuilder.buildChain();
+ValidationResult result = chain.validate(transaction, service);
 
-ValidationResult result = chain.validate(transaction);
+if (!result.isValid()) {
+    System.out.println("Validation failed: " + result.getErrorMessage());
+}
 ```
 
 **Critères de validation** :
-- Chaque validateur a une seule responsabilité
-- Ordre des validations configurable
-- Facile d'ajouter de nouveaux validateurs
+- Au moins 5 validateurs dans la chaîne
+- Chaque validateur est indépendant
+- La validation s'arrête au premier échec
+- Facile d'ajouter un nouveau validateur
 
 ---
 
-## 🔄 PARTIE 4 : PATTERNS ADDITIONNELS (SI TEMPS DISPONIBLE)
-
-### Exercice 9 : Singleton Pattern
-
-**Problème identifié** : Certains composants doivent être uniques (configuration, générateurs d'ID).
-
-**Objectif** : Créer des Singletons pour les ressources partagées
-
-**Instructions** :
-1. Créez un `TransactionIdGenerator` en Singleton (thread-safe)
-2. Créez un `BankingConfiguration` en Singleton pour les paramètres globaux
-3. Utilisez ces singletons dans le code
-
-**Exemple d'utilisation attendu** :
-```java
-String txId = TransactionIdGenerator.getInstance().generateId();
-double maxTransfer = BankingConfiguration.getInstance().getMaxTransferAmount();
-```
-
-**Critères de validation** :
-- Une seule instance existe
-- Thread-safe
-- Lazy initialization
-
----
-
-### Exercice 10 : Prototype Pattern
-
-**Problème identifié** : Création de comptes similaires ou templates de transactions.
-
-**Objectif** : Utiliser le Prototype pattern pour cloner des objets
-
-**Instructions** :
-1. Implémentez `Cloneable` dans `BankAccount`
-2. Créez une méthode `clone()` appropriée
-3. Créez un `AccountTemplateRegistry` qui stocke des prototypes de comptes
-4. Permettez la création de nouveaux comptes à partir de templates
-
-**Exemple d'utilisation attendu** :
-```java
-BankAccount template = templateRegistry.getTemplate("COMPTE_ETUDIANT");
-BankAccount newAccount = template.clone();
-newAccount.setCustomerName("Nouveau client");
-```
-
-**Critères de validation** :
-- Le clonage est profond (deep copy)
-- Les templates sont réutilisables
-- Simplification pour les comptes standards
-
----
-
-### Exercice 11 : Composite Pattern
-
-**Problème identifié** : Gestion de comptes groupés (comptes joints, comptes d'entreprise avec sous-comptes).
-
-**Objectif** : Utiliser Composite pour gérer des hiérarchies de comptes
-
-**Instructions** :
-1. Créez une interface `AccountComponent` avec :
-   - `getBalance()`
-   - `addTransaction()`
-   - `generateStatement()`
-2. Implémentez :
-   - `SimpleAccount` (feuille)
-   - `CompositeAccount` (composite, contient d'autres comptes)
-3. Permettez de traiter un compte simple et un groupe de comptes de manière uniforme
-
-**Exemple d'utilisation attendu** :
-```java
-CompositeAccount familyAccount = new CompositeAccount("Compte Famille");
-familyAccount.add(new SimpleAccount("Compte Parent 1"));
-familyAccount.add(new SimpleAccount("Compte Parent 2"));
-double totalBalance = familyAccount.getBalance(); // Somme des sous-comptes
-```
-
-**Critères de validation** :
-- Traitement uniforme des comptes simples et composites
-- Navigation dans la hiérarchie
-- Opérations récursives fonctionnelles
-
----
-
-### Exercice 12 : Template Method Pattern
-
-**Problème identifié** : Le traitement des transactions a toujours les mêmes étapes mais avec des variations.
-
-**Objectif** : Créer un Template Method pour le traitement des transactions
-
-**Instructions** :
-1. Créez une classe abstraite `TransactionProcessor` avec :
-   - `processTransaction()` (template method)
-   - Étapes abstraites : `validate()`, `executeTransaction()`, `notifyCustomer()`
-2. Implémentez des processeurs concrets :
-   - `DepositProcessor`
-   - `WithdrawalProcessor`
-   - `TransferProcessor`
-3. Chaque processeur implémente les étapes spécifiques
-
-**Exemple d'utilisation attendu** :
-```java
-TransactionProcessor processor = new WithdrawalProcessor();
-processor.processTransaction(transaction); // Suit le template défini
-```
-
-**Critères de validation** :
-- L'algorithme général est dans la classe de base
-- Les variations sont dans les sous-classes
-- Pas de code dupliqué
-
----
-
-### Exercice 13 : Observer Pattern
+### Exercice 12 : Observer Pattern
 
 **Problème identifié** : Les notifications (email, SMS) sont dispersées et couplées au code métier.
 
-**Objectif** : Implémenter Observer pour les notifications
+**Objectif** : Implémenter Observer pour les notifications et l'audit
 
 **Instructions** :
-1. Créez une interface `TransactionObserver` avec `onTransactionCompleted(Transaction)`
-2. Implémentez des observateurs concrets :
+1. Créez une interface `TransactionObserver` avec `onTransactionCompleted(Transaction, BankingService)`
+2. Créez un `TransactionSubject` pour gérer les observateurs
+3. Implémentez des observateurs concrets :
    - `EmailNotificationObserver`
-   - `SmsNotificationObserver`
+   - `SMSNotificationObserver`
    - `AuditLogObserver`
    - `FraudDetectionObserver`
-3. Modifiez `BankingService` pour notifier les observateurs
-4. Permettez l'ajout/retrait dynamique d'observateurs
+   - `StatisticsObserver` (bonus)
+4. Intégrez dans `BankingService`
 
 **Exemple d'utilisation attendu** :
 ```java
-TransactionSubject subject = new TransactionSubject();
-subject.addObserver(new EmailNotificationObserver());
-subject.addObserver(new SmsNotificationObserver());
-subject.addObserver(new AuditLogObserver());
+BankingService service = new BankingService();
+service.addObserver(new EmailNotificationObserver());
+service.addObserver(new SMSNotificationObserver());
+service.addObserver(new AuditLogObserver());
 
-subject.notifyObservers(transaction); // Tous les observateurs sont notifiés
+// Les transactions notifient automatiquement tous les observateurs
+service.processTransaction("DEPOT", null, "ACC1001", 500);
 ```
 
 **Critères de validation** :
-- Découplage entre le code métier et les notifications
-- Facile d'ajouter de nouveaux types de notifications
-- Observateurs configurables dynamiquement
+- Au moins 4 observateurs implémentés
+- Les observateurs peuvent être ajoutés/retirés dynamiquement
+- Un observateur peut échouer sans bloquer les autres
+- BankingService ne dépend pas des observateurs concrets
 
 ---
 
