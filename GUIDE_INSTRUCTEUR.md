@@ -446,141 +446,396 @@ public class BusinessBankingPackage implements BankingPackageFactory {
 
 ---
 
-### Jour 2 - Matin : Patterns Structurels
+### Jour 2 - Matin : Patterns Comportementaux
 
-#### 6. Exercice 5 : Adapter Pattern (1h)
+#### 5. Exercice 8 : Command Pattern (1h30)
 
-**Solution attendue** :
-
+**Problème à identifier** :
 ```java
-public class TransactionIdGenerator {
-    private static volatile TransactionIdGenerator instance;
-    private final AtomicLong counter = new AtomicLong(1);
-
-    private TransactionIdGenerator() {
-        // Constructeur privé
-    }
-
-    public static TransactionIdGenerator getInstance() {
-        if (instance == null) {
-            synchronized (TransactionIdGenerator.class) {
-                if (instance == null) {
-                    instance = new TransactionIdGenerator();
-                }
-            }
-        }
-        return instance;
-    }
-
-    public String generateId() {
-        return "TX" + counter.getAndIncrement();
-    }
-}
-
-public class BankingConfiguration {
-    private static volatile BankingConfiguration instance;
-
-    private double maxTransferAmount = 50000.0;
-    private double maxDailyWithdrawal = 1000.0;
-    private int fraudAlertThreshold = 5;
-
-    private BankingConfiguration() {
-        // Load from properties file or environment
-    }
-
-    public static BankingConfiguration getInstance() {
-        if (instance == null) {
-            synchronized (BankingConfiguration.class) {
-                if (instance == null) {
-                    instance = new BankingConfiguration();
-                }
-            }
-        }
-        return instance;
-    }
-
-    public double getMaxTransferAmount() { return maxTransferAmount; }
-    public double getMaxDailyWithdrawal() { return maxDailyWithdrawal; }
-    public int getFraudAlertThreshold() { return fraudAlertThreshold; }
-}
+// Les transactions sont exécutées immédiatement sans historique
+account.setBalance(account.getBalance() + amount);
+tx.setStatus("COMPLETED");
+// Pas de possibilité d'annulation ou de rejeu
 ```
 
-**⚠️ Avertissement à donner** : Dans les applications modernes (Spring, Jakarta EE), préférez l'injection de dépendances. Le Singleton est utile pour des cas spécifiques (configuration, cache, etc.).
-
-**🎓 Points à discuter** :
-- Double-checked locking
-- Thread-safety
-- Alternatives : enum singleton, holder pattern
-- Problèmes de testabilité
-
----
-
-#### 7. Exercice 6 : Facade Pattern (1h)
-
 **Solution attendue** :
 
 ```java
-public class BankAccount implements Cloneable {
-    // Champs existants...
+// Interface Command
+public interface BankCommand {
+    boolean execute();
+    boolean undo();
+    String getDescription();
+}
+
+// Commande concrète : Dépôt
+public class DepositCommand implements BankCommand {
+    private BankAccount account;
+    private double amount;
+    private boolean executed = false;
+
+    public DepositCommand(BankAccount account, double amount) {
+        this.account = account;
+        this.amount = amount;
+    }
 
     @Override
-    public BankAccount clone() {
-        try {
-            BankAccount cloned = (BankAccount) super.clone();
-            // Deep copy si nécessaire pour des objets complexes
-            cloned.creationDate = (Date) this.creationDate.clone();
-            return cloned;
-        } catch (CloneNotSupportedException e) {
-            throw new AssertionError("Cloning not supported", e);
-        }
+    public boolean execute() {
+        if (amount <= 0) return false;
+        account.setBalance(account.getBalance() + amount);
+        executed = true;
+        System.out.println("Deposited " + amount + " EUR");
+        return true;
+    }
+
+    @Override
+    public boolean undo() {
+        if (!executed) return false;
+        account.setBalance(account.getBalance() - amount);
+        executed = false;
+        System.out.println("Undo deposit of " + amount + " EUR");
+        return true;
+    }
+
+    @Override
+    public String getDescription() {
+        return "Deposit " + amount + " EUR to account " + account.getAccountNumber();
     }
 }
 
-public class AccountTemplateRegistry {
-    private Map<String, BankAccount> templates = new HashMap<>();
+// Commande concrète : Retrait
+public class WithdrawCommand implements BankCommand {
+    private BankAccount account;
+    private double amount;
+    private boolean executed = false;
 
-    public AccountTemplateRegistry() {
-        // Initialiser les templates
-        BankAccount studentTemplate = new BankAccount.Builder()
-            .accountType("COURANT")
-            .interestRate(0.0)
-            .overdraftLimit(200.0)
-            .build();
-        templates.put("COMPTE_ETUDIANT", studentTemplate);
-
-        BankAccount seniorTemplate = new BankAccount.Builder()
-            .accountType("EPARGNE")
-            .interestRate(3.0)
-            .overdraftLimit(0.0)
-            .build();
-        templates.put("COMPTE_SENIOR", seniorTemplate);
+    public WithdrawCommand(BankAccount account, double amount) {
+        this.account = account;
+        this.amount = amount;
     }
 
-    public BankAccount createFromTemplate(String templateName, String customerName,
-                                         String email, String phone, double balance) {
-        BankAccount template = templates.get(templateName);
-        if (template == null) {
-            throw new IllegalArgumentException("Template not found: " + templateName);
+    @Override
+    public boolean execute() {
+        if (account.getBalance() >= amount) {
+            account.setBalance(account.getBalance() - amount);
+            executed = true;
+            System.out.println("Withdrew " + amount + " EUR");
+            return true;
         }
+        System.out.println("Insufficient funds");
+        return false;
+    }
 
-        BankAccount newAccount = template.clone();
-        // Personnaliser
-        String accountNumber = "ACC" + System.currentTimeMillis();
-        // Utiliser reflection ou setter pour modifier les champs
+    @Override
+    public boolean undo() {
+        if (!executed) return false;
+        account.setBalance(account.getBalance() + amount);
+        executed = false;
+        System.out.println("Undo withdrawal of " + amount + " EUR");
+        return true;
+    }
 
-        return newAccount;
+    @Override
+    public String getDescription() {
+        return "Withdraw " + amount + " EUR from account " + account.getAccountNumber();
+    }
+}
+
+// Macro Command : Virement
+public class TransferCommand implements BankCommand {
+    private WithdrawCommand withdraw;
+    private DepositCommand deposit;
+
+    public TransferCommand(BankAccount from, BankAccount to, double amount) {
+        this.withdraw = new WithdrawCommand(from, amount);
+        this.deposit = new DepositCommand(to, amount);
+    }
+
+    @Override
+    public boolean execute() {
+        if (withdraw.execute()) {
+            if (deposit.execute()) {
+                System.out.println("Transfer completed");
+                return true;
+            } else {
+                withdraw.undo(); // Rollback
+                System.out.println("Transfer failed - rollback");
+                return false;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean undo() {
+        deposit.undo();
+        withdraw.undo();
+        System.out.println("Transfer undone");
+        return true;
+    }
+
+    @Override
+    public String getDescription() {
+        return "Transfer from " + withdraw.getDescription() + " to " + deposit.getDescription();
+    }
+}
+
+// Invoker : Exécuteur de transactions
+public class TransactionExecutor {
+    private Stack<BankCommand> executedCommands = new Stack<>();
+    private Stack<BankCommand> undoneCommands = new Stack<>();
+
+    public boolean execute(BankCommand command) {
+        if (command.execute()) {
+            executedCommands.push(command);
+            undoneCommands.clear(); // Efface l'historique redo
+            return true;
+        }
+        return false;
+    }
+
+    public boolean undo() {
+        if (executedCommands.isEmpty()) {
+            System.out.println("Nothing to undo");
+            return false;
+        }
+        BankCommand command = executedCommands.pop();
+        if (command.undo()) {
+            undoneCommands.push(command);
+            return true;
+        }
+        return false;
+    }
+
+    public boolean redo() {
+        if (undoneCommands.isEmpty()) {
+            System.out.println("Nothing to redo");
+            return false;
+        }
+        BankCommand command = undoneCommands.pop();
+        if (command.execute()) {
+            executedCommands.push(command);
+            return true;
+        }
+        return false;
+    }
+
+    public void printHistory() {
+        System.out.println("Command history:");
+        for (BankCommand cmd : executedCommands) {
+            System.out.println("  - " + cmd.getDescription());
+        }
     }
 }
 ```
 
 **🎓 Points à discuter** :
-- Shallow vs Deep copy
-- Quand utiliser Prototype vs Factory
-- Alternatives modernes (copy constructors, builders)
+- Command encapsule une requête en objet
+- Permet undo/redo facilement
+- Macro commands pour opérations composées (TransferCommand)
+- Facilite la journalisation et les transactions
+- Possibilité de mettre en file d'attente
+- Command vs simple méthode : quand utiliser Command ?
+
+**💡 Astuce pédagogique** : Montrez l'analogie avec Ctrl+Z / Ctrl+Y dans un éditeur de texte.
 
 ---
 
-#### 8. Exercice 7 : Decorator Pattern (1h30)
+#### 6. Exercice 9 : State Pattern (1h30)
+
+**Problème à identifier** :
+```java
+// if/else pour gérer les états
+if (account.getStatus().equals("ACTIVE")) {
+    // Autoriser
+} else if (account.getStatus().equals("SUSPENDED")) {
+    // Limiter
+} else if (account.getStatus().equals("FROZEN")) {
+    // Bloquer
+}
+```
+
+**Solution attendue** :
+
+```java
+// Interface State
+public interface AccountState {
+    boolean canDeposit();
+    boolean canWithdraw();
+    boolean canTransfer();
+    double getWithdrawalLimit();
+    String getStateName();
+    void handleStateTransition(BankAccount account, String action);
+}
+
+// État concret : Actif
+public class ActiveState implements AccountState {
+    @Override
+    public boolean canDeposit() { return true; }
+
+    @Override
+    public boolean canWithdraw() { return true; }
+
+    @Override
+    public boolean canTransfer() { return true; }
+
+    @Override
+    public double getWithdrawalLimit() { return Double.MAX_VALUE; }
+
+    @Override
+    public String getStateName() { return "ACTIVE"; }
+
+    @Override
+    public void handleStateTransition(BankAccount account, String action) {
+        if (action.equals("SUSPEND")) {
+            account.setState(new SuspendedState());
+        } else if (action.equals("FREEZE")) {
+            account.setState(new FrozenState());
+        }
+    }
+}
+
+// État concret : Suspendu
+public class SuspendedState implements AccountState {
+    private static final double DAILY_LIMIT = 500.0;
+
+    @Override
+    public boolean canDeposit() { return true; }
+
+    @Override
+    public boolean canWithdraw() { return true; } // Mais limité
+
+    @Override
+    public boolean canTransfer() { return false; }
+
+    @Override
+    public double getWithdrawalLimit() { return DAILY_LIMIT; }
+
+    @Override
+    public String getStateName() { return "SUSPENDED"; }
+
+    @Override
+    public void handleStateTransition(BankAccount account, String action) {
+        if (action.equals("ACTIVATE")) {
+            account.setState(new ActiveState());
+        } else if (action.equals("FREEZE")) {
+            account.setState(new FrozenState());
+        }
+    }
+}
+
+// État concret : Gelé
+public class FrozenState implements AccountState {
+    @Override
+    public boolean canDeposit() { return false; }
+
+    @Override
+    public boolean canWithdraw() { return false; }
+
+    @Override
+    public boolean canTransfer() { return false; }
+
+    @Override
+    public double getWithdrawalLimit() { return 0; }
+
+    @Override
+    public String getStateName() { return "FROZEN"; }
+
+    @Override
+    public void handleStateTransition(BankAccount account, String action) {
+        if (action.equals("UNFREEZE")) {
+            account.setState(new ActiveState());
+        } else if (action.equals("CLOSE")) {
+            account.setState(new ClosedState());
+        }
+    }
+}
+
+// État concret : Fermé
+public class ClosedState implements AccountState {
+    @Override
+    public boolean canDeposit() { return false; }
+
+    @Override
+    public boolean canWithdraw() { return false; }
+
+    @Override
+    public boolean canTransfer() { return false; }
+
+    @Override
+    public double getWithdrawalLimit() { return 0; }
+
+    @Override
+    public String getStateName() { return "CLOSED"; }
+
+    @Override
+    public void handleStateTransition(BankAccount account, String action) {
+        System.out.println("Cannot change state of closed account");
+    }
+}
+
+// Modification de BankAccount
+public class BankAccount {
+    private AccountState state;
+    // ... autres champs
+
+    public BankAccount(...) {
+        // ...
+        this.state = new ActiveState(); // État initial
+    }
+
+    public boolean deposit(double amount) {
+        if (!state.canDeposit()) {
+            System.out.println("Deposits not allowed in " + state.getStateName());
+            return false;
+        }
+        balance += amount;
+        return true;
+    }
+
+    public boolean withdraw(double amount) {
+        if (!state.canWithdraw()) {
+            System.out.println("Withdrawals not allowed in " + state.getStateName());
+            return false;
+        }
+        if (amount > state.getWithdrawalLimit()) {
+            System.out.println("Amount exceeds withdrawal limit");
+            return false;
+        }
+        if (balance >= amount) {
+            balance -= amount;
+            return true;
+        }
+        return false;
+    }
+
+    public void changeState(String action) {
+        state.handleStateTransition(this, action);
+    }
+
+    public void setState(AccountState newState) {
+        System.out.println("State changed from " + state.getStateName() +
+                          " to " + newState.getStateName());
+        this.state = newState;
+    }
+}
+```
+
+**🎓 Points à discuter** :
+- State encapsule le comportement lié à l'état
+- Élimine les conditionnelles multiples (Open/Closed Principle)
+- Facilite l'ajout de nouveaux états
+- Les transitions sont gérées par les états eux-mêmes
+- State vs Strategy : différence ?
+- Diagramme d'états important pour la conception
+
+**💡 Astuce pédagogique** : Dessinez le diagramme de transitions d'états au tableau pour visualiser.
+
+---
+
+### Jour 2 - Après-midi : Patterns Structurels
+
+#### 7. Exercice 7 : Adapter Pattern (1h)
 
 **Solution attendue** :
 
@@ -638,24 +893,35 @@ public class PaymentGatewayAdapter implements PaymentGateway {
 
 ---
 
-### Jour 2 - Après-midi : Chain of Responsibility et révision
+### Jour 2 - Après-midi : Patterns Structurels (suite)
 
-#### 9. Exercice 8 : Chain of Responsibility Pattern (1h30)
+#### 8. Exercice 10 : Composite Pattern (1h)
+
+**Problème à identifier** :
+```java
+// Gestion séparée des comptes individuels et portefeuilles
+// Pas de traitement uniforme
+```
 
 **Solution attendue** :
 
 ```java
+// Interface Component
 public interface AccountComponent {
     double getBalance();
-    void deposit(double amount);
-    void withdraw(double amount);
-    String generateStatement();
+    boolean deposit(double amount);
+    boolean withdraw(double amount);
+    String getAccountInfo();
+    void addChild(AccountComponent component);
+    void removeChild(AccountComponent component);
+    List<AccountComponent> getChildren();
 }
 
-public class SimpleAccount implements AccountComponent {
+// Leaf : Compte individuel
+public class IndividualAccount implements AccountComponent {
     private BankAccount account;
 
-    public SimpleAccount(BankAccount account) {
+    public IndividualAccount(BankAccount account) {
         this.account = account;
     }
 
@@ -665,82 +931,134 @@ public class SimpleAccount implements AccountComponent {
     }
 
     @Override
-    public void deposit(double amount) {
+    public boolean deposit(double amount) {
         account.setBalance(account.getBalance() + amount);
+        return true;
     }
 
     @Override
-    public void withdraw(double amount) {
-        account.setBalance(account.getBalance() - amount);
+    public boolean withdraw(double amount) {
+        if (account.getBalance() >= amount) {
+            account.setBalance(account.getBalance() - amount);
+            return true;
+        }
+        return false;
     }
 
     @Override
-    public String generateStatement() {
-        return "Account: " + account.getAccountNumber() +
-               " Balance: " + account.getBalance();
+    public String getAccountInfo() {
+        return "Account " + account.getAccountNumber() +
+               ": " + account.getBalance() + " EUR";
+    }
+
+    @Override
+    public void addChild(AccountComponent component) {
+        throw new UnsupportedOperationException("Cannot add to leaf");
+    }
+
+    @Override
+    public void removeChild(AccountComponent component) {
+        throw new UnsupportedOperationException("Cannot remove from leaf");
+    }
+
+    @Override
+    public List<AccountComponent> getChildren() {
+        return Collections.emptyList();
     }
 }
 
-public class CompositeAccount implements AccountComponent {
+// Composite : Portefeuille de comptes
+public class AccountPortfolio implements AccountComponent {
     private String name;
-    private List<AccountComponent> children = new ArrayList<>();
+    private List<AccountComponent> accounts = new ArrayList<>();
 
-    public CompositeAccount(String name) {
+    public AccountPortfolio(String name) {
         this.name = name;
-    }
-
-    public void add(AccountComponent account) {
-        children.add(account);
-    }
-
-    public void remove(AccountComponent account) {
-        children.remove(account);
     }
 
     @Override
     public double getBalance() {
-        return children.stream()
+        return accounts.stream()
                       .mapToDouble(AccountComponent::getBalance)
                       .sum();
     }
 
     @Override
-    public void deposit(double amount) {
-        // Distribuer équitablement
-        double amountPerAccount = amount / children.size();
-        children.forEach(child -> child.deposit(amountPerAccount));
+    public boolean deposit(double amount) {
+        if (accounts.isEmpty()) return false;
+
+        // Répartir équitablement sur tous les comptes
+        double amountPerAccount = amount / accounts.size();
+        for (AccountComponent account : accounts) {
+            account.deposit(amountPerAccount);
+        }
+        return true;
     }
 
     @Override
-    public void withdraw(double amount) {
-        double amountPerAccount = amount / children.size();
-        children.forEach(child -> child.withdraw(amountPerAccount));
+    public boolean withdraw(double amount) {
+        // Vérifier si le solde total est suffisant
+        if (getBalance() < amount) {
+            return false;
+        }
+
+        // Retirer proportionnellement
+        double amountPerAccount = amount / accounts.size();
+        for (AccountComponent account : accounts) {
+            if (!account.withdraw(amountPerAccount)) {
+                // Rollback si un retrait échoue
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override
-    public String generateStatement() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Composite Account: ").append(name).append("\n");
-        sb.append("Total Balance: ").append(getBalance()).append("\n");
-        sb.append("Sub-accounts:\n");
-        children.forEach(child -> sb.append("  ").append(child.generateStatement()).append("\n"));
-        return sb.toString();
+    public String getAccountInfo() {
+        StringBuilder info = new StringBuilder();
+        info.append("Portfolio: ").append(name).append("\n");
+        info.append("Total Balance: ").append(getBalance()).append(" EUR\n");
+        info.append("Accounts:\n");
+        for (AccountComponent account : accounts) {
+            info.append("  - ").append(account.getAccountInfo()).append("\n");
+        }
+        return info.toString();
+    }
+
+    @Override
+    public void addChild(AccountComponent component) {
+        accounts.add(component);
+        System.out.println("Added account to portfolio " + name);
+    }
+
+    @Override
+    public void removeChild(AccountComponent component) {
+        accounts.remove(component);
+        System.out.println("Removed account from portfolio " + name);
+    }
+
+    @Override
+    public List<AccountComponent> getChildren() {
+        return new ArrayList<>(accounts);
     }
 }
 ```
 
 **🎓 Points à discuter** :
-- Traitement uniforme d'objets simples et composés
-- Cas d'usage : portefeuilles, comptes joints
-- Navigation dans l'arbre
+- Composite traite objets individuels et compositions uniformément
+- Structure en arbre (portfolios de portfolios possibles)
+- Opérations récursives (getBalance, deposit, withdraw)
+- Cas d'usage : comptes familiaux, comptes entreprise avec sous-comptes
+- Permet des hiérarchies complexes
+- Attention au rollback en cas d'échec partiel
 
 ---
 
 ## 🔄 PATTERNS ADDITIONNELS (SI TEMPS DISPONIBLE)
 
-### Jour 3 - Patterns additionnels
+### Jour 2 - Après-midi (suite) / Jour 3 - Patterns additionnels
 
-#### 10. Exercice 9 : Singleton Pattern (1h)
+#### 9. Exercice 9 : Decorator Pattern (1h30)
 
 **Solution attendue** :
 
@@ -849,7 +1167,7 @@ public class NotificationAccountDecorator extends AccountDecorator {
 
 ---
 
-#### 11. Exercice 10 : Prototype Pattern (1h)
+#### 10. Exercice 10 : Facade Pattern (1h)
 
 **Solution attendue** :
 
@@ -949,321 +1267,253 @@ public class BankingFacade {
 
 ---
 
-#### 11. Exercice 10 : Strategy (1h30)
+### Jour 2 - Après-midi (suite) : Patterns Comportementaux
+
+#### 11. Exercice 11 : Chain of Responsibility Pattern (1h30)
+
+**Problème à identifier** :
+```java
+// Toutes les validations sont dans processTransaction (lignes 72-214)
+// C'est un monstre de if/else imbriqués !
+```
 
 **Solution attendue** :
 
 ```java
-public interface FeeCalculationStrategy {
-    double calculateFee(Transaction transaction);
+// Interface Handler
+public interface TransactionValidator {
+    void setNext(TransactionValidator next);
+    ValidationResult validate(Transaction transaction, BankingService service);
 }
 
-public class CurrentAccountFeeStrategy implements FeeCalculationStrategy {
-    private static final double WITHDRAWAL_THRESHOLD = 1000.0;
-    private static final double HIGH_WITHDRAWAL_FEE = 2.5;
-    private static final double TRANSFER_FEE = 1.0;
+// Classe de résultat
+public class ValidationResult {
+    private boolean valid;
+    private String errorMessage;
+
+    public ValidationResult(boolean valid, String errorMessage) {
+        this.valid = valid;
+        this.errorMessage = errorMessage;
+    }
+
+    public boolean isValid() { return valid; }
+    public String getErrorMessage() { return errorMessage; }
+
+    public static ValidationResult success() {
+        return new ValidationResult(true, null);
+    }
+
+    public static ValidationResult failure(String message) {
+        return new ValidationResult(false, message);
+    }
+}
+
+// Classe abstraite de base
+public abstract class AbstractTransactionValidator implements TransactionValidator {
+    protected TransactionValidator next;
 
     @Override
-    public double calculateFee(Transaction transaction) {
-        switch (transaction.getType()) {
-            case "DEPOT":
-                return 0.0;
-            case "RETRAIT":
-                return transaction.getAmount() > WITHDRAWAL_THRESHOLD ?
-                       HIGH_WITHDRAWAL_FEE : 0.0;
-            case "VIREMENT":
-                return TRANSFER_FEE;
-            default:
-                return 0.0;
+    public void setNext(TransactionValidator next) {
+        this.next = next;
+    }
+
+    protected ValidationResult validateNext(Transaction transaction, BankingService service) {
+        if (next != null) {
+            return next.validate(transaction, service);
         }
+        return ValidationResult.success();
     }
 }
 
-public class SavingsAccountFeeStrategy implements FeeCalculationStrategy {
-    private static final double WITHDRAWAL_FEE = 1.0;
-    private static final double TRANSFER_FEE = 2.5;
-
+// Validateur de montant
+public class AmountValidator extends AbstractTransactionValidator {
     @Override
-    public double calculateFee(Transaction transaction) {
-        switch (transaction.getType()) {
-            case "DEPOT":
-                return 0.0;
-            case "RETRAIT":
-                return WITHDRAWAL_FEE;
-            case "VIREMENT":
-                return TRANSFER_FEE; // Frais élevé pour décourager les virements
-            default:
-                return 0.0;
+    public ValidationResult validate(Transaction transaction, BankingService service) {
+        if (transaction.getAmount() <= 0) {
+            return ValidationResult.failure("Amount must be positive");
         }
-    }
-}
 
-public class BusinessAccountFeeStrategy implements FeeCalculationStrategy {
-    private static final double LARGE_WITHDRAWAL_THRESHOLD = 5000.0;
-    private static final double LARGE_WITHDRAWAL_FEE = 5.0;
-    private static final double SMALL_WITHDRAWAL_FEE = 2.0;
-    private static final double TRANSFER_FEE = 0.5;
-
-    @Override
-    public double calculateFee(Transaction transaction) {
-        switch (transaction.getType()) {
-            case "DEPOT":
-                return 0.0;
-            case "RETRAIT":
-                return transaction.getAmount() > LARGE_WITHDRAWAL_THRESHOLD ?
-                       LARGE_WITHDRAWAL_FEE : SMALL_WITHDRAWAL_FEE;
-            case "VIREMENT":
-                return TRANSFER_FEE;
-            default:
-                return 0.0;
+        if (transaction.getAmount() > 50000) {
+            return ValidationResult.failure("Amount exceeds maximum limit (50000 EUR)");
         }
+
+        return validateNext(transaction, service);
     }
 }
 
-public class NoFeeStrategy implements FeeCalculationStrategy {
+// Validateur d'existence de compte
+public class AccountExistsValidator extends AbstractTransactionValidator {
     @Override
-    public double calculateFee(Transaction transaction) {
-        return 0.0; // Pas de frais (clients premium)
+    public ValidationResult validate(Transaction transaction, BankingService service) {
+        if (transaction.getSourceAccount() != null) {
+            BankAccount source = service.getAccount(transaction.getSourceAccount());
+            if (source == null) {
+                return ValidationResult.failure("Source account not found");
+            }
+        }
+
+        if (transaction.getDestinationAccount() != null) {
+            BankAccount dest = service.getAccount(transaction.getDestinationAccount());
+            if (dest == null) {
+                return ValidationResult.failure("Destination account not found");
+            }
+        }
+
+        return validateNext(transaction, service);
     }
 }
 
-// Utilisation dans BankAccount
-public class BankAccount {
-    private FeeCalculationStrategy feeStrategy;
+// Validateur de solde
+public class BalanceValidator extends AbstractTransactionValidator {
+    @Override
+    public ValidationResult validate(Transaction transaction, BankingService service) {
+        if (transaction.getSourceAccount() == null) {
+            return validateNext(transaction, service);
+        }
 
-    public void setFeeStrategy(FeeCalculationStrategy strategy) {
-        this.feeStrategy = strategy;
+        BankAccount account = service.getAccount(transaction.getSourceAccount());
+        double requiredAmount = transaction.getAmount(); // + fees si applicable
+
+        if (account.getBalance() - requiredAmount < -account.getOverdraftLimit()) {
+            return ValidationResult.failure("Insufficient funds (overdraft limit exceeded)");
+        }
+
+        return validateNext(transaction, service);
+    }
+}
+
+// Validateur de limite quotidienne
+public class DailyLimitValidator extends AbstractTransactionValidator {
+    private Map<String, DailyTransactionTracker> trackers = new HashMap<>();
+
+    @Override
+    public ValidationResult validate(Transaction transaction, BankingService service) {
+        if (transaction.getSourceAccount() == null) {
+            return validateNext(transaction, service);
+        }
+
+        String accountNumber = transaction.getSourceAccount();
+        DailyTransactionTracker tracker = trackers.computeIfAbsent(
+            accountNumber, k -> new DailyTransactionTracker());
+
+        double todayTotal = tracker.getTodayTotal();
+        double maxDaily = 1000.0; // Configuration
+
+        if (todayTotal + transaction.getAmount() > maxDaily) {
+            return ValidationResult.failure("Daily withdrawal limit exceeded");
+        }
+
+        tracker.addTransaction(transaction.getAmount());
+        return validateNext(transaction, service);
+    }
+}
+
+// Validateur anti-fraude
+public class FraudDetectionValidator extends AbstractTransactionValidator {
+    private static final int MAX_TRANSACTIONS_PER_HOUR = 5;
+    private Map<String, List<Transaction>> recentTransactions = new HashMap<>();
+
+    @Override
+    public ValidationResult validate(Transaction transaction, BankingService service) {
+        if (transaction.getSourceAccount() == null) {
+            return validateNext(transaction, service);
+        }
+
+        String accountNumber = transaction.getSourceAccount();
+        List<Transaction> recent = recentTransactions.computeIfAbsent(
+            accountNumber, k -> new ArrayList<>());
+
+        // Nettoyer les anciennes transactions
+        cleanOldTransactions(recent);
+
+        // Vérifier le nombre de transactions
+        if (recent.size() >= MAX_TRANSACTIONS_PER_HOUR) {
+            return ValidationResult.failure(
+                "Too many transactions in the last hour. Possible fraud.");
+        }
+
+        // Vérifier les montants inhabituels
+        if (transaction.getAmount() > 5000 && isNightTime()) {
+            return ValidationResult.failure(
+                "Large transaction during night hours requires verification");
+        }
+
+        recent.add(transaction);
+        return validateNext(transaction, service);
     }
 
-    public double calculateTransactionFee(Transaction transaction) {
-        return feeStrategy.calculateFee(transaction);
+    private boolean isNightTime() {
+        int hour = java.time.LocalTime.now().getHour();
+        return hour >= 23 || hour <= 6;
+    }
+
+    private void cleanOldTransactions(List<Transaction> transactions) {
+        long oneHourAgo = System.currentTimeMillis() - (60 * 60 * 1000);
+        transactions.removeIf(tx ->
+            tx.getTransactionDate().getTime() < oneHourAgo);
+    }
+}
+
+// Builder pour construire la chaîne
+public class ValidationChainBuilder {
+    public static TransactionValidator buildChain() {
+        TransactionValidator amountValidator = new AmountValidator();
+        TransactionValidator accountValidator = new AccountExistsValidator();
+        TransactionValidator balanceValidator = new BalanceValidator();
+        TransactionValidator dailyLimitValidator = new DailyLimitValidator();
+        TransactionValidator fraudValidator = new FraudDetectionValidator();
+
+        // Construire la chaîne
+        amountValidator.setNext(accountValidator);
+        accountValidator.setNext(balanceValidator);
+        balanceValidator.setNext(dailyLimitValidator);
+        dailyLimitValidator.setNext(fraudValidator);
+
+        return amountValidator; // Retourne le premier de la chaîne
+    }
+}
+
+// Utilisation dans BankingService
+public class BankingService {
+    private TransactionValidator validationChain;
+
+    public BankingService() {
+        this.validationChain = ValidationChainBuilder.buildChain();
+    }
+
+    public boolean processTransaction(...) {
+        Transaction tx = new Transaction(...);
+
+        // Valider avec la chaîne
+        ValidationResult result = validationChain.validate(tx, this);
+
+        if (!result.isValid()) {
+            System.out.println("Validation failed: " + result.getErrorMessage());
+            tx.setStatus("REJECTED");
+            tx.setRejectionReason(result.getErrorMessage());
+            return false;
+        }
+
+        // Exécuter la transaction
+        // ...
+        return true;
     }
 }
 ```
 
 **🎓 Points à discuter** :
-- Élimination des conditionnelles
-- Changement de stratégie à runtime
-- Combinaison avec Factory
+- Chain of Responsibility découple l'émetteur du récepteur
+- Chaque handler a une responsabilité unique (SRP)
+- Facile d'ajouter/retirer/réorganiser des validateurs
+- Possibilité de court-circuiter la chaîne (dès le premier échec)
+- L'ordre de la chaîne est important !
+- Builder pattern pour construire la chaîne facilement
+
+**💡 Astuce pédagogique** : Montrez que chaque validateur peut être testé indépendamment.
 
 ---
 
-#### 12. Exercice 11 : Template Method (1h30)
-
-**Solution attendue** :
-
-```java
-public abstract class TransactionProcessor {
-
-    // Template method
-    public final boolean processTransaction(Transaction transaction) {
-        // 1. Validation
-        if (!validate(transaction)) {
-            transaction.setStatus("REJECTED");
-            transaction.setRejectionReason(getValidationError());
-            return false;
-        }
-
-        // 2. Exécution
-        boolean success = executeTransaction(transaction);
-
-        if (success) {
-            // 3. Post-traitement
-            postProcess(transaction);
-
-            // 4. Notification
-            notifyCustomer(transaction);
-
-            transaction.setStatus("COMPLETED");
-        } else {
-            transaction.setStatus("REJECTED");
-        }
-
-        // 5. Audit (toujours effectué)
-        audit(transaction);
-
-        return success;
-    }
-
-    // Méthodes abstraites (à implémenter)
-    protected abstract boolean validate(Transaction transaction);
-    protected abstract boolean executeTransaction(Transaction transaction);
-    protected abstract void notifyCustomer(Transaction transaction);
-
-    // Méthodes avec implémentation par défaut (hooks)
-    protected void postProcess(Transaction transaction) {
-        // Comportement par défaut (peut être surchargé)
-    }
-
-    protected String getValidationError() {
-        return "Validation failed";
-    }
-
-    private void audit(Transaction transaction) {
-        System.out.println("Audit: " + transaction.getTransactionId() +
-                          " - " + transaction.getStatus());
-    }
-}
-
-public class DepositProcessor extends TransactionProcessor {
-    private BankingService bankingService;
-
-    public DepositProcessor(BankingService service) {
-        this.bankingService = service;
-    }
-
-    @Override
-    protected boolean validate(Transaction transaction) {
-        if (transaction.getAmount() <= 0) {
-            return false;
-        }
-        if (transaction.getAmount() > 10000) {
-            return false; // Nécessite vérification manuelle
-        }
-        BankAccount account = bankingService.getAccount(transaction.getDestinationAccount());
-        return account != null;
-    }
-
-    @Override
-    protected boolean executeTransaction(Transaction transaction) {
-        BankAccount account = bankingService.getAccount(transaction.getDestinationAccount());
-        account.setBalance(account.getBalance() + transaction.getAmount());
-        return true;
-    }
-
-    @Override
-    protected void notifyCustomer(Transaction transaction) {
-        BankAccount account = bankingService.getAccount(transaction.getDestinationAccount());
-        System.out.println("Email sent to: " + account.getCustomerEmail() +
-                          " - Deposit of " + transaction.getAmount() + " EUR");
-    }
-}
-
-public class WithdrawalProcessor extends TransactionProcessor {
-    private BankingService bankingService;
-    private FeeCalculationStrategy feeStrategy;
-
-    public WithdrawalProcessor(BankingService service, FeeCalculationStrategy feeStrategy) {
-        this.bankingService = service;
-        this.feeStrategy = feeStrategy;
-    }
-
-    @Override
-    protected boolean validate(Transaction transaction) {
-        if (transaction.getAmount() <= 0) {
-            return false;
-        }
-        BankAccount account = bankingService.getAccount(transaction.getSourceAccount());
-        if (account == null) {
-            return false;
-        }
-
-        double fees = feeStrategy.calculateFee(transaction);
-        double totalAmount = transaction.getAmount() + fees;
-
-        return account.getBalance() - totalAmount >= -account.getOverdraftLimit();
-    }
-
-    @Override
-    protected boolean executeTransaction(Transaction transaction) {
-        BankAccount account = bankingService.getAccount(transaction.getSourceAccount());
-        double fees = feeStrategy.calculateFee(transaction);
-        double totalAmount = transaction.getAmount() + fees;
-
-        account.setBalance(account.getBalance() - totalAmount);
-        return true;
-    }
-
-    @Override
-    protected void postProcess(Transaction transaction) {
-        BankAccount account = bankingService.getAccount(transaction.getSourceAccount());
-        if (account.getBalance() < 0) {
-            System.out.println("ALERT: Account in overdraft!");
-        }
-    }
-
-    @Override
-    protected void notifyCustomer(Transaction transaction) {
-        BankAccount account = bankingService.getAccount(transaction.getSourceAccount());
-        double fees = feeStrategy.calculateFee(transaction);
-
-        System.out.println("Email sent to: " + account.getCustomerEmail() +
-                          " - Withdrawal of " + transaction.getAmount() +
-                          " EUR (fees: " + fees + " EUR)");
-
-        if (account.getBalance() < 0) {
-            System.out.println("SMS sent to: " + account.getCustomerPhone() +
-                              " - Overdraft alert!");
-        }
-    }
-}
-
-public class TransferProcessor extends TransactionProcessor {
-    private BankingService bankingService;
-    private FeeCalculationStrategy feeStrategy;
-
-    public TransferProcessor(BankingService service, FeeCalculationStrategy feeStrategy) {
-        this.bankingService = service;
-        this.feeStrategy = feeStrategy;
-    }
-
-    @Override
-    protected boolean validate(Transaction transaction) {
-        if (transaction.getAmount() <= 0) {
-            return false;
-        }
-
-        BankAccount source = bankingService.getAccount(transaction.getSourceAccount());
-        BankAccount destination = bankingService.getAccount(transaction.getDestinationAccount());
-
-        if (source == null || destination == null) {
-            return false;
-        }
-
-        double fees = feeStrategy.calculateFee(transaction);
-        double totalAmount = transaction.getAmount() + fees;
-
-        return source.getBalance() - totalAmount >= -source.getOverdraftLimit();
-    }
-
-    @Override
-    protected boolean executeTransaction(Transaction transaction) {
-        BankAccount source = bankingService.getAccount(transaction.getSourceAccount());
-        BankAccount destination = bankingService.getAccount(transaction.getDestinationAccount());
-
-        double fees = feeStrategy.calculateFee(transaction);
-        double totalAmount = transaction.getAmount() + fees;
-
-        source.setBalance(source.getBalance() - totalAmount);
-        destination.setBalance(destination.getBalance() + transaction.getAmount());
-
-        return true;
-    }
-
-    @Override
-    protected void notifyCustomer(Transaction transaction) {
-        BankAccount source = bankingService.getAccount(transaction.getSourceAccount());
-        BankAccount destination = bankingService.getAccount(transaction.getDestinationAccount());
-
-        System.out.println("Email sent to: " + source.getCustomerEmail() +
-                          " - Transfer sent: " + transaction.getAmount() + " EUR");
-        System.out.println("Email sent to: " + destination.getCustomerEmail() +
-                          " - Transfer received: " + transaction.getAmount() + " EUR");
-    }
-}
-```
-
-**🎓 Points à discuter** :
-- Algorithme général vs variations
-- Hollywood Principle : "Don't call us, we'll call you"
-- Hooks optionnels
-- Template Method vs Strategy
-
----
-
-### Jour 3 - Matin : Suite Patterns Comportementaux
-
-#### 13. Exercice 12 : Chain of Responsibility (1h30)
+#### 12. Exercice 12 : Observer Pattern (2h)
 
 **Solution attendue** :
 
@@ -1454,30 +1704,64 @@ public class ValidationChainBuilder {
 
 ---
 
-#### 14. Exercice 13 : Observer (2h)
+**Problème à identifier** :
+```java
+// Ligne 100, 151, 156, 204-205 dans BankingService
+// Notifications codées en dur
+System.out.println("Email envoyé à: " + account.getCustomerEmail());
+System.out.println("SMS d'alerte envoyé à: " + account.getCustomerPhone());
+```
 
 **Solution attendue** :
 
 ```java
+// Interface Observer
 public interface TransactionObserver {
     void onTransactionCompleted(Transaction transaction, BankingService service);
 }
 
+// Subject (Observable)
+public class TransactionSubject {
+    private List<TransactionObserver> observers = new ArrayList<>();
+
+    public void attach(TransactionObserver observer) {
+        observers.add(observer);
+        System.out.println("Observer attached: " + observer.getClass().getSimpleName());
+    }
+
+    public void detach(TransactionObserver observer) {
+        observers.remove(observer);
+        System.out.println("Observer detached: " + observer.getClass().getSimpleName());
+    }
+
+    public void notifyObservers(Transaction transaction, BankingService service) {
+        for (TransactionObserver observer : observers) {
+            try {
+                observer.onTransactionCompleted(transaction, service);
+            } catch (Exception e) {
+                System.err.println("Observer failed: " + observer.getClass().getSimpleName() +
+                                  " - " + e.getMessage());
+                // Continue avec les autres observateurs
+            }
+        }
+    }
+}
+
+// Observateur concret : Email
 public class EmailNotificationObserver implements TransactionObserver {
     @Override
     public void onTransactionCompleted(Transaction transaction, BankingService service) {
         if (transaction.getSourceAccount() != null) {
             BankAccount source = service.getAccount(transaction.getSourceAccount());
             sendEmail(source.getCustomerEmail(),
-                     "Transaction completed: " + transaction.getType() +
-                     " - " + transaction.getAmount() + " EUR");
+                     "Transaction " + transaction.getType() + " of " +
+                     transaction.getAmount() + " EUR completed");
         }
 
         if (transaction.getDestinationAccount() != null) {
-            BankAccount destination = service.getAccount(transaction.getDestinationAccount());
-            sendEmail(destination.getCustomerEmail(),
-                     "Transaction received: " + transaction.getType() +
-                     " - " + transaction.getAmount() + " EUR");
+            BankAccount dest = service.getAccount(transaction.getDestinationAccount());
+            sendEmail(dest.getCustomerEmail(),
+                     "You received " + transaction.getAmount() + " EUR");
         }
     }
 
@@ -1486,14 +1770,15 @@ public class EmailNotificationObserver implements TransactionObserver {
     }
 }
 
-public class SmsNotificationObserver implements TransactionObserver {
+// Observateur concret : SMS
+public class SMSNotificationObserver implements TransactionObserver {
     @Override
     public void onTransactionCompleted(Transaction transaction, BankingService service) {
-        // Envoyer SMS uniquement pour les gros montants
+        // Envoyer SMS seulement pour les montants élevés
         if (transaction.getAmount() > 1000) {
             if (transaction.getSourceAccount() != null) {
                 BankAccount source = service.getAccount(transaction.getSourceAccount());
-                sendSms(source.getCustomerPhone(),
+                sendSMS(source.getCustomerPhone(),
                        "Large transaction alert: " + transaction.getAmount() + " EUR");
             }
         }
@@ -1502,30 +1787,45 @@ public class SmsNotificationObserver implements TransactionObserver {
         if (transaction.getSourceAccount() != null) {
             BankAccount source = service.getAccount(transaction.getSourceAccount());
             if (source.getBalance() < 0) {
-                sendSms(source.getCustomerPhone(), "Overdraft alert! Balance: " + source.getBalance());
+                sendSMS(source.getCustomerPhone(),
+                       "Overdraft alert! Balance: " + source.getBalance() + " EUR");
             }
         }
     }
 
-    private void sendSms(String phone, String message) {
+    private void sendSMS(String phone, String message) {
         System.out.println("SMS to " + phone + ": " + message);
     }
 }
 
+// Observateur concret : Audit
 public class AuditLogObserver implements TransactionObserver {
+    private List<String> auditLog = new ArrayList<>();
+
     @Override
     public void onTransactionCompleted(Transaction transaction, BankingService service) {
-        // Log dans un fichier ou base de données
-        System.out.println("AUDIT: Transaction " + transaction.getTransactionId() +
-                          " | Type: " + transaction.getType() +
-                          " | Amount: " + transaction.getAmount() +
-                          " | Status: " + transaction.getStatus() +
-                          " | Date: " + transaction.getTransactionDate());
+        String logEntry = String.format(
+            "[%s] Transaction %s | Type: %s | Amount: %.2f | Status: %s",
+            new Date(),
+            transaction.getTransactionId(),
+            transaction.getType(),
+            transaction.getAmount(),
+            transaction.getStatus()
+        );
+
+        auditLog.add(logEntry);
+        System.out.println("AUDIT: " + logEntry);
+    }
+
+    public List<String> getAuditLog() {
+        return new ArrayList<>(auditLog);
     }
 }
 
+// Observateur concret : Détection de fraude
 public class FraudDetectionObserver implements TransactionObserver {
     private Map<String, List<Transaction>> recentTransactions = new HashMap<>();
+    private static final int FRAUD_THRESHOLD = 5;
 
     @Override
     public void onTransactionCompleted(Transaction transaction, BankingService service) {
@@ -1536,41 +1836,63 @@ public class FraudDetectionObserver implements TransactionObserver {
             accountNumber, k -> new ArrayList<>());
         recent.add(transaction);
 
-        // Nettoyer les anciennes transactions (> 1 heure)
+        // Nettoyer les anciennes transactions
         cleanOldTransactions(recent);
 
         // Détecter les patterns suspects
-        int threshold = BankingConfiguration.getInstance().getFraudAlertThreshold();
-        if (recent.size() > threshold) {
+        if (recent.size() > FRAUD_THRESHOLD) {
             System.out.println("FRAUD ALERT: Account " + accountNumber +
                               " has " + recent.size() +
                               " transactions in the last hour!");
-            // Bloquer le compte ou demander vérification
+        }
+
+        // Détecter montants inhabituels
+        double avgAmount = calculateAverageAmount(recent);
+        if (transaction.getAmount() > avgAmount * 5) {
+            System.out.println("FRAUD ALERT: Unusual amount " +
+                              transaction.getAmount() +
+                              " (avg: " + avgAmount + ")");
         }
     }
 
     private void cleanOldTransactions(List<Transaction> transactions) {
         long oneHourAgo = System.currentTimeMillis() - (60 * 60 * 1000);
-        transactions.removeIf(tx -> tx.getTransactionDate().getTime() < oneHourAgo);
+        transactions.removeIf(tx ->
+            tx.getTransactionDate().getTime() < oneHourAgo);
+    }
+
+    private double calculateAverageAmount(List<Transaction> transactions) {
+        if (transactions.isEmpty()) return 0;
+        return transactions.stream()
+                          .mapToDouble(Transaction::getAmount)
+                          .average()
+                          .orElse(0);
     }
 }
 
-// Subject (Observable)
-public class TransactionSubject {
-    private List<TransactionObserver> observers = new ArrayList<>();
+// Observateur concret : Statistiques (bonus)
+public class StatisticsObserver implements TransactionObserver {
+    private int totalTransactions = 0;
+    private double totalAmount = 0;
+    private Map<String, Integer> transactionsByType = new HashMap<>();
 
-    public void addObserver(TransactionObserver observer) {
-        observers.add(observer);
+    @Override
+    public void onTransactionCompleted(Transaction transaction, BankingService service) {
+        totalTransactions++;
+        totalAmount += transaction.getAmount();
+
+        String type = transaction.getType();
+        transactionsByType.put(type, transactionsByType.getOrDefault(type, 0) + 1);
     }
 
-    public void removeObserver(TransactionObserver observer) {
-        observers.remove(observer);
-    }
-
-    public void notifyObservers(Transaction transaction, BankingService service) {
-        for (TransactionObserver observer : observers) {
-            observer.onTransactionCompleted(transaction, service);
-        }
+    public void printStatistics() {
+        System.out.println("\n=== STATISTICS ===");
+        System.out.println("Total transactions: " + totalTransactions);
+        System.out.println("Total amount: " + totalAmount + " EUR");
+        System.out.println("Average amount: " + (totalAmount / totalTransactions) + " EUR");
+        System.out.println("By type:");
+        transactionsByType.forEach((type, count) ->
+            System.out.println("  " + type + ": " + count));
     }
 }
 
@@ -1580,63 +1902,50 @@ public class BankingService {
 
     public BankingService() {
         // Configuration des observateurs par défaut
-        transactionSubject.addObserver(new EmailNotificationObserver());
-        transactionSubject.addObserver(new SmsNotificationObserver());
-        transactionSubject.addObserver(new AuditLogObserver());
-        transactionSubject.addObserver(new FraudDetectionObserver());
+        transactionSubject.attach(new EmailNotificationObserver());
+        transactionSubject.attach(new SMSNotificationObserver());
+        transactionSubject.attach(new AuditLogObserver());
+        transactionSubject.attach(new FraudDetectionObserver());
+        transactionSubject.attach(new StatisticsObserver());
     }
 
     public boolean processTransaction(...) {
-        // ... logique existante ...
+        // ... logique de transaction
 
         if (success) {
+            // Notifier tous les observateurs
             transactionSubject.notifyObservers(transaction, this);
         }
 
         return success;
     }
 
-    public void addTransactionObserver(TransactionObserver observer) {
-        transactionSubject.addObserver(observer);
+    public void addObserver(TransactionObserver observer) {
+        transactionSubject.attach(observer);
     }
 
-    public void removeTransactionObserver(TransactionObserver observer) {
-        transactionSubject.removeObserver(observer);
+    public void removeObserver(TransactionObserver observer) {
+        transactionSubject.detach(observer);
     }
 }
 ```
 
 **🎓 Points à discuter** :
-- Découplage entre sujet et observateurs
-- Push vs Pull model
-- Gestion des erreurs dans les observateurs
-- Performance (beaucoup d'observateurs)
-- Observer vs EventBus moderne
-
----
-
-#### 12. Exercice 11 : Composite Pattern (1h30)
-
-_Solution déjà documentée ci-dessus - voir lignes précédentes_
-
----
-
-#### 13. Exercice 12 : Template Method Pattern (1h30)
-
-_Solution déjà documentée ci-dessus - voir lignes précédentes_
-
----
-
-#### 14. Exercice 13 : Observer Pattern (2h)
-
-_Solution déjà documentée ci-dessus - voir lignes précédentes_
+- Observer découple le sujet des observateurs
+- Push model (données passées) vs Pull model (observateur va chercher)
+- Possibilité d'ajouter/retirer des observateurs dynamiquement
+- Gestion des erreurs : un observateur ne doit pas bloquer les autres (try-catch)
+- Attention aux problèmes de performance avec beaucoup d'observateurs
+- Observer vs EventBus/MessageQueue moderne
+- Pattern très utilisé dans les frameworks (JavaFX, Spring Events, etc.)
 
 ---
 
 ## 📝 RÉSUMÉ DE L'ORDRE DES EXERCICES
 
-### ✅ Exercices principaux (Jour 1-2, ~16h)
+### ✅ Exercices principaux (Jour 1-2, ~14-16h)
 
+**Jour 1 - Patterns Créationnels et Structurels** :
 1. **Strategy** (2h) - Calcul des frais - *COMMENCE ICI*
 2. **Builder** (1h30) - Construction de BankAccount
 3. **Factory** (1h30) - Création de comptes
@@ -1644,15 +1953,13 @@ _Solution déjà documentée ci-dessus - voir lignes précédentes_
 5. **Adapter** (1h) - Intégration API externe
 6. **Facade** (1h) - Simplification de BankingService
 7. **Decorator** (1h30) - Fonctionnalités additionnelles
-8. **Chain of Responsibility** (1h30) - Validation des transactions
 
-### 🔄 Exercices additionnels (si temps, Jour 3, ~6h)
-
-9. **Singleton** (1h) - Configuration et générateurs d'ID
-10. **Prototype** (1h) - Templates de comptes
-11. **Composite** (1h30) - Comptes groupés
-12. **Template Method** (1h30) - Traitement des transactions
-13. **Observer** (2h) - Notifications
+**Jour 2 - Patterns Comportementaux et Structurels** :
+8. **Command** (1h30) - Encapsulation des transactions (undo/redo)
+9. **State** (1h30) - Gestion des états du compte
+10. **Composite** (1h) - Portefeuilles de comptes
+11. **Chain of Responsibility** (1h30) - Validation en chaîne
+12. **Observer** (2h) - Notifications et audit
 
 ---
 
