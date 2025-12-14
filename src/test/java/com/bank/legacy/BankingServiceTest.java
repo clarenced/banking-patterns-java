@@ -1,5 +1,7 @@
 package com.bank.legacy;
 
+import com.bank.legacy.old.BankAccount;
+import com.bank.legacy.old.BankingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

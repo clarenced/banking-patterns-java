@@ -1,6 +1,6 @@
 package com.bank.patterns.decorator2;
 
-import com.bank.legacy.Transaction;
+import com.bank.legacy.old.Transaction;
 
 public class Demo {
 

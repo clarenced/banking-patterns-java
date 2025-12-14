@@ -43,7 +43,7 @@ banking-patterns-java/
 mvn clean compile
 
 # Exécuter le programme principal
-mvn exec:java -Dexec.mainClass="com.bank.legacy.Main"
+mvn exec:java -Dexec.mainClass="com.bank.legacy.old.Main"
 
 # Exécuter les tests
 mvn test

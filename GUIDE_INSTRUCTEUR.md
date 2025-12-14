@@ -446,7 +446,7 @@ public class BusinessBankingPackage implements BankingPackageFactory {
 
 ---
 
-### Jour 2 - Matin : Patterns Comportementaux
+### Session 1 - Matin : Patterns Comportementaux
 
 #### 5. Exercice 8 : Command Pattern (1h30)
 
@@ -833,7 +833,7 @@ public class BankAccount {
 
 ---
 
-### Jour 2 - Après-midi : Patterns Structurels
+### Session 1 - Après-midi : Patterns Structurels
 
 #### 7. Exercice 7 : Adapter Pattern (1h)
 
@@ -893,7 +893,7 @@ public class PaymentGatewayAdapter implements PaymentGateway {
 
 ---
 
-### Jour 2 - Après-midi : Patterns Structurels (suite)
+### Session 1 - Après-midi : Patterns Structurels (suite)
 
 #### 8. Exercice 10 : Composite Pattern (1h)
 
@@ -1056,7 +1056,7 @@ public class AccountPortfolio implements AccountComponent {
 
 ## 🔄 PATTERNS ADDITIONNELS (SI TEMPS DISPONIBLE)
 
-### Jour 2 - Après-midi (suite) / Jour 3 - Patterns additionnels
+### Session 1 - Après-midi (suite) / Session 2 - Patterns additionnels
 
 #### 9. Exercice 9 : Decorator Pattern (1h30)
 
@@ -1267,7 +1267,7 @@ public class BankingFacade {
 
 ---
 
-### Jour 2 - Après-midi (suite) : Patterns Comportementaux
+### Session 1 - Après-midi (suite) : Patterns Comportementaux
 
 #### 11. Exercice 11 : Chain of Responsibility Pattern (1h30)
 
@@ -1954,7 +1954,7 @@ public class BankingService {
 6. **Facade** (1h) - Simplification de BankingService
 7. **Decorator** (1h30) - Fonctionnalités additionnelles
 
-**Jour 2 - Patterns Comportementaux et Structurels** :
+**Session 1 - Patterns Comportementaux et Structurels** :
 8. **Command** (1h30) - Encapsulation des transactions (undo/redo)
 9. **State** (1h30) - Gestion des états du compte
 10. **Composite** (1h) - Portefeuilles de comptes
@@ -1963,7 +1963,7 @@ public class BankingService {
 
 ---
 
-### Nouvelles Fonctionnalités + Synthèse (Jour 3)
+### Nouvelles Fonctionnalités + Synthèse (Session 2)
 
 #### 15. Nouvelles fonctionnalités (2-3h)
 
@@ -2065,6 +2065,721 @@ Laissez les participants choisir parmi les fonctionnalités proposées et les im
 - https://refactoring.guru
 - https://sourcemaking.com
 - https://java-design-patterns.com
+
+---
+
+Bonne formation ! 🚀
+
+---
+
+## SESSION 2 - PATTERNS STRUCTURELS AVANCÉS (COMPOSITE + ITERATOR)
+
+### Vue d'ensemble Session 2
+
+**Durée** : 4-5 heures
+**Patterns** : Composite, Iterator, Refactoring avec iterators
+**Nouveauté** : Liste de transactions dans BankAccount
+
+### Préparation avant le Session 2
+
+⚠️ **Important** : Avant de commencer le Session 2, assurez-vous que les participants ont :
+1. Une liste de transactions dans `BankAccount`
+2. Les 3 méthodes d'affichage dupliquées dans `BankingService`
+
+Le code de départ est déjà dans le repository (BankAccount et BankingService sont configurés).
+
+---
+
+### Exercice 1 : Pattern Composite (1h30)
+
+#### 🎯 Objectif pédagogique
+
+Le pattern Composite permet de traiter uniformément des objets individuels et des compositions d'objets.
+
+**Nouveau cas d'usage** : Portefeuille d'investissement
+- Instruments financiers individuels (Leaf) : Action, Obligation, ETF
+- Portefeuilles (Composite) : peuvent contenir instruments ET sous-portefeuilles
+- Calcul récursif de la valeur totale et du rendement pondéré
+
+#### ✅ Solution complète
+
+**InvestmentComponent.java** (Interface Component)
+```java
+package com.bank.patterns.composite;
+
+import java.util.List;
+
+/**
+ * Interface commune pour les instruments financiers et les portefeuilles
+ */
+public interface InvestmentComponent {
+    double getValeur();
+    double getRendement();  // En pourcentage
+    String getDescription();
+    void ajouter(InvestmentComponent component);
+    void retirer(InvestmentComponent component);
+    List<InvestmentComponent> getChildren();
+}
+```
+
+**Action.java** (Leaf)
+```java
+package com.bank.patterns.composite;
+
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Leaf : Représente une action (titre de propriété d'une entreprise)
+ */
+public class Action implements InvestmentComponent {
+    private String symbole;
+    private int quantite;
+    private double prixUnitaire;
+
+    public Action(String symbole, int quantite, double prixUnitaire) {
+        this.symbole = symbole;
+        this.quantite = quantite;
+        this.prixUnitaire = prixUnitaire;
+    }
+
+    @Override
+    public double getValeur() {
+        return quantite * prixUnitaire;
+    }
+
+    @Override
+    public double getRendement() {
+        // Rendement simplifié à 5% pour les actions
+        return 5.0;
+    }
+
+    @Override
+    public String getDescription() {
+        return String.format("Action %s: %d x %.2f€ = %.2f€",
+            symbole, quantite, prixUnitaire, getValeur());
+    }
+
+    @Override
+    public void ajouter(InvestmentComponent component) {
+        throw new UnsupportedOperationException("Cannot add to a leaf");
+    }
+
+    @Override
+    public void retirer(InvestmentComponent component) {
+        throw new UnsupportedOperationException("Cannot remove from a leaf");
+    }
+
+    @Override
+    public List<InvestmentComponent> getChildren() {
+        return Collections.emptyList();
+    }
+
+    // Getters
+    public String getSymbole() { return symbole; }
+    public int getQuantite() { return quantite; }
+    public double getPrixUnitaire() { return prixUnitaire; }
+}
+```
+
+**Obligation.java** (Leaf)
+```java
+package com.bank.patterns.composite;
+
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Leaf : Représente une obligation (titre de créance)
+ */
+public class Obligation implements InvestmentComponent {
+    private String nom;
+    private double montantNominal;
+    private double tauxInteret;  // 0.02 pour 2%
+
+    public Obligation(String nom, double montantNominal, double tauxInteret) {
+        this.nom = nom;
+        this.montantNominal = montantNominal;
+        this.tauxInteret = tauxInteret;
+    }
+
+    @Override
+    public double getValeur() {
+        return montantNominal;
+    }
+
+    @Override
+    public double getRendement() {
+        return tauxInteret * 100;  // Convertir en pourcentage
+    }
+
+    @Override
+    public String getDescription() {
+        return String.format("Obligation %s: %.2f€ à %.1f%%",
+            nom, montantNominal, getRendement());
+    }
+
+    @Override
+    public void ajouter(InvestmentComponent component) {
+        throw new UnsupportedOperationException("Cannot add to a leaf");
+    }
+
+    @Override
+    public void retirer(InvestmentComponent component) {
+        throw new UnsupportedOperationException("Cannot remove from a leaf");
+    }
+
+    @Override
+    public List<InvestmentComponent> getChildren() {
+        return Collections.emptyList();
+    }
+
+    // Getters
+    public String getNom() { return nom; }
+    public double getMontantNominal() { return montantNominal; }
+    public double getTauxInteret() { return tauxInteret; }
+}
+```
+
+**ETF.java** (Leaf)
+```java
+package com.bank.patterns.composite;
+
+import java.util.Collections;
+import java.util.List;
+
+/**
+ * Leaf : Représente un ETF (fonds indiciel coté)
+ */
+public class ETF implements InvestmentComponent {
+    private String nom;
+    private int parts;
+    private double prixPart;
+
+    public ETF(String nom, int parts, double prixPart) {
+        this.nom = nom;
+        this.parts = parts;
+        this.prixPart = prixPart;
+    }
+
+    @Override
+    public double getValeur() {
+        return parts * prixPart;
+    }
+
+    @Override
+    public double getRendement() {
+        // Rendement moyen simplifié à 7% pour les ETF
+        return 7.0;
+    }
+
+    @Override
+    public String getDescription() {
+        return String.format("ETF %s: %d parts x %.2f€ = %.2f€",
+            nom, parts, prixPart, getValeur());
+    }
+
+    @Override
+    public void ajouter(InvestmentComponent component) {
+        throw new UnsupportedOperationException("Cannot add to a leaf");
+    }
+
+    @Override
+    public void retirer(InvestmentComponent component) {
+        throw new UnsupportedOperationException("Cannot remove from a leaf");
+    }
+
+    @Override
+    public List<InvestmentComponent> getChildren() {
+        return Collections.emptyList();
+    }
+
+    // Getters
+    public String getNom() { return nom; }
+    public int getParts() { return parts; }
+    public double getPrixPart() { return prixPart; }
+}
+```
+
+**Portfolio.java** (Composite)
+```java
+package com.bank.patterns.composite;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * Composite : Représente un portefeuille d'investissements
+ * Peut contenir des instruments ET d'autres portefeuilles
+ */
+public class Portfolio implements InvestmentComponent {
+    private String nom;
+    private List<InvestmentComponent> investments = new ArrayList<>();
+
+    public Portfolio(String nom) {
+        this.nom = nom;
+    }
+
+    @Override
+    public double getValeur() {
+        // Somme récursive de la valeur de tous les éléments
+        return investments.stream()
+                         .mapToDouble(InvestmentComponent::getValeur)
+                         .sum();
+    }
+
+    @Override
+    public double getRendement() {
+        // Rendement moyen pondéré par la valeur
+        double totalValeur = getValeur();
+        if (totalValeur == 0) return 0;
+
+        double sommeRendementsPonderes = 0;
+        for (InvestmentComponent inv : investments) {
+            double valeur = inv.getValeur();
+            double rendement = inv.getRendement();
+            sommeRendementsPonderes += valeur * rendement;
+        }
+
+        return sommeRendementsPonderes / totalValeur;
+    }
+
+    @Override
+    public String getDescription() {
+        return getDescription(0);
+    }
+
+    /**
+     * Version avec indentation pour affichage hiérarchique
+     */
+    private String getDescription(int niveau) {
+        String indent = "  ".repeat(niveau);
+        StringBuilder sb = new StringBuilder();
+
+        sb.append(String.format("%sPortfolio: %s (%.2f€)\n",
+            indent, nom, getValeur()));
+
+        for (InvestmentComponent inv : investments) {
+            if (inv instanceof Portfolio) {
+                sb.append(((Portfolio) inv).getDescription(niveau + 1));
+            } else {
+                sb.append("  ".repeat(niveau + 1))
+                  .append(inv.getDescription())
+                  .append("\n");
+            }
+        }
+
+        return sb.toString();
+    }
+
+    @Override
+    public void ajouter(InvestmentComponent component) {
+        investments.add(component);
+        System.out.println("Ajouté au portfolio " + nom + ": " +
+                          component.getDescription().split("\n")[0]);
+    }
+
+    @Override
+    public void retirer(InvestmentComponent component) {
+        investments.remove(component);
+        System.out.println("Retiré du portfolio " + nom);
+    }
+
+    @Override
+    public List<InvestmentComponent> getChildren() {
+        return new ArrayList<>(investments);
+    }
+
+    public String getNom() {
+        return nom;
+    }
+}
+```
+
+**CompositeDemo.java** (Démonstration)
+```java
+package com.bank.patterns.composite;
+
+/**
+ * Démonstration du pattern Composite avec un portefeuille d'investissement
+ */
+public class CompositeDemo {
+    public static void main(String[] args) {
+        System.out.println("╔══════════════════════════════════════════════════════════╗");
+        System.out.println("║     PATTERN COMPOSITE - Portefeuille d'Investissement   ║");
+        System.out.println("╚══════════════════════════════════════════════════════════╝\n");
+
+        // ===== 1. Créer des instruments financiers individuels =====
+        System.out.println("=== Création des instruments financiers ===");
+        Action apple = new Action("AAPL", 10, 150.0);
+        Action microsoft = new Action("MSFT", 15, 120.0);
+        Action google = new Action("GOOGL", 8, 150.0);
+
+        Obligation govBond = new Obligation("FR-BOND-2030", 5000, 0.02);
+        Obligation corpBond = new Obligation("CORP-BOND", 1250, 0.035);
+
+        ETF sp500 = new ETF("SP500-ETF", 50, 100.0);
+
+        System.out.println("✓ 3 actions créées");
+        System.out.println("✓ 2 obligations créées");
+        System.out.println("✓ 1 ETF créé\n");
+
+        // ===== 2. Créer des sous-portefeuilles thématiques =====
+        System.out.println("=== Création des sous-portefeuilles ===");
+
+        Portfolio techPortfolio = new Portfolio("Actions Tech");
+        techPortfolio.ajouter(apple);
+        techPortfolio.ajouter(microsoft);
+        techPortfolio.ajouter(google);
+
+        Portfolio revenuFixe = new Portfolio("Revenu Fixe");
+        revenuFixe.ajouter(govBond);
+        revenuFixe.ajouter(corpBond);
+
+        System.out.println();
+
+        // ===== 3. Créer le portefeuille principal =====
+        System.out.println("=== Création du portefeuille principal ===");
+        Portfolio mainPortfolio = new Portfolio("Portefeuille Principal");
+        mainPortfolio.ajouter(techPortfolio);  // Sous-portefeuille
+        mainPortfolio.ajouter(revenuFixe);     // Sous-portefeuille
+        mainPortfolio.ajouter(sp500);          // Instrument direct
+
+        System.out.println();
+
+        // ===== 4. Affichage de la valeur totale et du rendement =====
+        System.out.println("=== PORTEFEUILLE PRINCIPAL ===");
+        System.out.println("Valeur totale: " + String.format("%.2f€", mainPortfolio.getValeur()));
+        System.out.println("Rendement moyen pondéré: " + String.format("%.2f%%", mainPortfolio.getRendement()));
+        System.out.println();
+
+        // ===== 5. Affichage de la description hiérarchique =====
+        System.out.println("=== Description détaillée (hiérarchique) ===");
+        System.out.println(mainPortfolio.getDescription());
+
+        // ===== 6. Démontrer les opérations sur le portefeuille =====
+        System.out.println("=== Opérations sur le portefeuille ===");
+
+        // Ajouter un nouvel instrument
+        System.out.println("\n1. Ajout d'une nouvelle action Tesla:");
+        Action tesla = new Action("TSLA", 5, 200.0);
+        techPortfolio.ajouter(tesla);
+
+        System.out.println("\nNouvelle valeur totale: " + String.format("%.2f€", mainPortfolio.getValeur()));
+        System.out.println("Nouveau rendement: " + String.format("%.2f%%", mainPortfolio.getRendement()));
+
+        // Retirer un instrument
+        System.out.println("\n2. Retrait de l'action Google:");
+        techPortfolio.retirer(google);
+
+        System.out.println("\nValeur après retrait: " + String.format("%.2f€", mainPortfolio.getValeur()));
+
+        // ===== 7. Démontrer la récursivité =====
+        System.out.println("\n=== Démonstration de la récursivité ===");
+        System.out.println("Valeur du sous-portfolio Tech: " + String.format("%.2f€", techPortfolio.getValeur()));
+        System.out.println("Rendement du sous-portfolio Tech: " + String.format("%.2f%%", techPortfolio.getRendement()));
+
+        // ===== 8. Portfolio dans portfolio dans portfolio =====
+        System.out.println("\n=== Portfolio multi-niveaux ===");
+        Portfolio globalPortfolio = new Portfolio("Portfolio Global");
+        globalPortfolio.ajouter(mainPortfolio);
+        globalPortfolio.ajouter(new Action("BNP", 20, 50.0));
+
+        System.out.println("\nDescription du portfolio global:");
+        System.out.println(globalPortfolio.getDescription());
+
+        System.out.println("\nValeur totale du portfolio global: " +
+                          String.format("%.2f€", globalPortfolio.getValeur()));
+
+        // ===== Résumé =====
+        System.out.println("\n" + "=".repeat(60));
+        System.out.println("RÉSUMÉ - Points clés du pattern Composite");
+        System.out.println("=".repeat(60));
+        System.out.println("✓ Traitement uniforme des instruments et portfolios");
+        System.out.println("✓ Structure en arbre avec hiérarchie illimitée");
+        System.out.println("✓ Calculs récursifs (valeur, rendement)");
+        System.out.println("✓ Composition flexible de portefeuilles complexes");
+        System.out.println("=".repeat(60));
+    }
+}
+```
+
+#### 🎓 Points à discuter avec les participants
+
+1. **Transparence vs Sécurité**
+   - Interface commune avec `ajouter()` → Leaf lance exception
+   - Alternative : interface séparée pour Composite uniquement
+   - Discussion : Quel est le meilleur choix ?
+
+2. **Opérations récursives**
+   - `getValeur()` appelle récursivement getValeur sur tous les enfants
+   - `getRendement()` calcule le rendement pondéré (plus complexe)
+   - Performance : O(n) où n = nombre total d'instruments dans l'arbre
+
+3. **Calcul du rendement pondéré**
+   - Pourquoi pondérer par la valeur ?
+   - Exemple : 1000€ à 10% + 100€ à 5% = rendement moyen de ~9.5%, pas 7.5%
+   - Formule : Σ(valeur_i × rendement_i) / valeur_totale
+
+4. **Affichage hiérarchique**
+   - Utilisation de l'indentation pour visualiser la structure
+   - Récursion avec paramètre de niveau
+   - Alternative : utiliser le pattern Visitor
+
+5. **Cas d'usage réels**
+   - Gestion de patrimoine (portefeuilles diversifiés)
+   - Robo-advisors (allocation automatique)
+   - Reporting pour clients (vue consolidée)
+   - Stratégies d'investissement thématiques
+
+6. **Extensions possibles**
+   - Ajouter une méthode `getAllInstruments()` qui retourne une liste plate
+   - Ajouter un critère de filtrage (ex: instruments à haut rendement)
+   - Implémenter un rebalancing automatique
+   - Ajouter des contraintes (ex: max 30% en actions)
+
+---
+---
+
+### Exercice 2 : Pattern Iterator (1h30-2h)
+
+#### 🎯 Objectif pédagogique
+
+Créer des iterators personnalisés avec fonctionnalités supplémentaires (`reset()`) pour avoir un contrôle total sur le parcours des collections.
+
+#### ✅ Solution complète
+
+**TransactionIterator.java**
+
+```java
+package com.bank.patterns.iterator;
+
+import com.bank.legacy.old.Transaction;
+
+public interface TransactionIterator {
+    boolean hasNext();
+
+    Transaction next();
+
+    void reset();  // Fonctionnalité supplémentaire !
+}
+```
+
+**TransactionCollection.java**
+```java
+package com.bank.patterns.iterator;
+
+import java.util.Date;
+
+public interface TransactionCollection {
+    TransactionIterator createChronologicalIterator();
+    TransactionIterator createAmountIterator();
+    TransactionIterator createTypeIterator(String type);
+    TransactionIterator createDateRangeIterator(Date start, Date end);
+}
+```
+
+**(Les instructions détaillées sont dans EXERCICES_SESSION2.md - Exercice 2)**
+
+Fichiers à créer :
+- `TransactionIterator.java` (interface)
+- `TransactionCollection.java` (interface Aggregate)
+- `ChronologicalIterator.java`
+- `AmountIterator.java`
+- `TypeIterator.java`
+- `DateRangeIterator.java`
+- `BankAccountTransactionCollection.java`
+- `IteratorDemo.java`
+
+#### 🎓 Points à discuter
+
+1. **Iterator vs Stream**
+   - Iterator : contrôle manuel, reset possible
+   - Stream : fonctionnel, pas de reset, lazy evaluation
+   - Quand utiliser l'un ou l'autre ?
+
+2. **Copie défensive**
+   - Pourquoi copier la liste avant de trier ?
+   - Protection contre concurrent modification
+   - Coût en mémoire vs sécurité
+
+3. **Pattern Factory pour les iterators**
+   - `TransactionCollection` = Factory d'iterators
+   - Centralise la création
+
+4. **Extension possible**
+   - Ajouter `previous()` pour navigation bidirectionnelle
+   - Ajouter `current()` pour relire sans avancer
+   - Lazy filtering (ne filtrer qu'au moment de `next()`)
+
+---
+
+### Exercice Bonus : Combiner Composite et Iterator (30min)
+
+#### ✅ Solution complète
+
+**PortfolioIterator.java**
+
+```java
+package com.bank.patterns.iterator;
+
+import com.bank.legacy.applied.composite.AccountComponent;
+import com.bank.legacy.applied.composite.AccountPortfolio;
+
+import java.util.Stack;
+
+/**
+ * Iterator qui parcourt tous les comptes d'un portefeuille
+ * de manière plate (depth-first traversal)
+ */
+public class PortfolioIterator {
+    private Stack<AccountComponent> stack = new Stack<>();
+
+    public PortfolioIterator(AccountComponent root) {
+        stack.push(root);
+    }
+
+    public boolean hasNext() {
+        return !stack.isEmpty();
+    }
+
+    public AccountComponent next() {
+        if (!hasNext()) {
+            throw new java.util.NoSuchElementException("No more accounts");
+        }
+
+        AccountComponent current = stack.pop();
+
+        // Si c'est un composite, ajouter ses enfants à la pile
+        // Ils seront traités dans les prochains appels à next()
+        if (current instanceof AccountPortfolio) {
+            for (AccountComponent child : current.getChildren()) {
+                stack.push(child);
+            }
+        }
+
+        return current;
+    }
+
+    /**
+     * Réinitialise l'itérateur à la racine
+     */
+    public void reset(AccountComponent root) {
+        stack.clear();
+        stack.push(root);
+    }
+}
+```
+
+**Démonstration d'utilisation**
+```java
+// Créer une hiérarchie
+AccountComponent root = createComplexPortfolio(); // Portfolio avec sous-portfolios
+
+// Parcourir tous les comptes de manière plate
+PortfolioIterator iterator = new PortfolioIterator(root);
+
+System.out.println("=== All accounts in portfolio ===");
+while (iterator.hasNext()) {
+    AccountComponent account = iterator.next();
+    System.out.println(account.getAccountInfo());
+}
+```
+
+#### 🎓 Points à discuter
+
+1. **Parcours en profondeur vs en largeur**
+   - Stack → Depth-first (profondeur d'abord)
+   - Queue → Breadth-first (largeur d'abord)
+   - Quel est le meilleur pour un portefeuille ?
+
+2. **Visitor pattern comme alternative**
+   - Au lieu d'un iterator, utiliser Visitor
+   - Permet d'ajouter des opérations sans modifier Composite
+
+3. **Performance**
+   - Complexity: O(n) où n = nombre total de comptes
+   - Memory: O(h) où h = hauteur de l'arbre (taille de la stack)
+
+---
+
+## 🎯 Synthèse Session 2
+
+### Points clés à retenir
+
+1. **Pattern Iterator**
+   - Pattern Iterator complet avec classes personnalisées
+   - Ajout de fonctionnalités comme `reset()`
+   - Contrôle total sur le parcours des collections
+
+2. **Composite**
+   - Traitement uniforme d'objets individuels et compositions
+   - Structure en arbre
+   - Opérations récursives
+
+3. **Iterator**
+   - Encapsulation du parcours
+   - Multiple façons de parcourir la même collection
+   - Découplage entre collection et parcours
+
+4. **Patterns combinés**
+   - Composite + Iterator = puissance maximale
+   - Les patterns se renforcent mutuellement
+
+### Questions d'évaluation
+
+1. Quelle est la différence entre Composite et Decorator ?
+   - **Réponse** : Composite gère des hiérarchies (parent-enfants), Decorator ajoute des responsabilités
+
+2. Pourquoi Iterator copie-t-il la liste ?
+   - **Réponse** : Protection contre concurrent modification, isolation
+
+3. Peut-on combiner plusieurs filtres (Type ET DateRange) ?
+   - **Réponse** : Oui, avec un CompositeIterator ou ChainedIterator
+
+4. Pourquoi avoir `reset()` dans TransactionIterator ?
+   - **Réponse** : Permet de parcourir plusieurs fois sans recréer l'iterator
+
+5. Composite vs Decorator : similitudes et différences ?
+   - **Réponse** : Les deux utilisent composition, mais Composite gère des collections, Decorator ajoute des fonctionnalités
+
+### Variantes et extensions
+
+**Pour les participants avancés** :
+1. Implémenter un `CompositeTransactionIterator` qui combine plusieurs filtres
+2. Ajouter un `BidirectionalIterator` avec `previous()`
+3. Implémenter le pattern Visitor pour le Composite
+4. Créer un `LazyIterator` qui ne filtre qu'au moment de `next()`
+
+**Pour une formation plus longue** :
+- Ajouter le pattern **Memento** pour sauvegarder/restaurer l'état d'un compte
+- Implémenter le pattern **Flyweight** pour optimiser la mémoire des transactions
+- Utiliser **Proxy** pour lazy-loading des transactions depuis une base de données
+
+---
+
+## 📊 Checklist de validation pour l'instructeur
+
+### Exercice 1 : Composite
+- [ ] Interface `AccountComponent` créée
+- [ ] `IndividualAccount` (Leaf) implémenté
+- [ ] `AccountPortfolio` (Composite) implémenté
+- [ ] Portfolio de portfolios fonctionne
+- [ ] Opérations récursives fonctionnent (getBalance, deposit, withdraw)
+- [ ] Démo complète fournie
+
+### Exercice 2 : Iterator
+- [ ] Interface `TransactionIterator` avec `reset()`
+- [ ] Au moins 4 iterators concrets créés
+- [ ] Interface `TransactionCollection` (Aggregate)
+- [ ] `BankAccountTransactionCollection` implémenté
+- [ ] `reset()` fonctionne correctement
+- [ ] Démo montre tous les types d'iterators
+
+### Exercice Bonus
+- [ ] `PortfolioIterator` parcourt toute la hiérarchie
+- [ ] Utilise une `Stack` pour le parcours
+- [ ] Fonctionne avec des hiérarchies complexes
 
 ---
 
