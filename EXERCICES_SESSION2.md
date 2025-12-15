@@ -4,12 +4,13 @@
 
 Cette session approfondit les patterns structurels en implémentant le pattern **Composite** dans un nouveau contexte (portefeuille d'investissement) et le pattern **Iterator** pour parcourir des collections de manière élégante.
 
-**Durée totale estimée :** 4-5 heures
+**Durée totale estimée :** 9-11 heures
 
 **Patterns couverts :**
 - Composite Pattern (portefeuille d'investissement)
 - Iterator Pattern
-- Combinaison Composite + Iterator
+- Flyweight Pattern (optimisation mémoire des transactions)
+- Memento Pattern (sauvegarde/restauration d'états)
 
 ---
 
@@ -443,117 +444,577 @@ private static void printTransactions(String title, TransactionIterator iterator
 
 ---
 
-## Exercice Bonus : Combiner Composite et Iterator (30min)
+## Exercice 3 : Pattern Flyweight (1h30)
 
 ### 🎯 Objectif
-Créer un itérateur qui parcourt TOUS les instruments d'un portefeuille (y compris ceux dans les sous-portefeuilles) de manière plate, pour obtenir une liste complète de tous les investissements.
+Optimiser l'affichage d'un journal de transactions bancaires (TransactionLog) en réduisant drastiquement la consommation mémoire grâce au partage d'objets immuables communs.
 
 ### 📋 Contexte
-Vous avez un portefeuille principal avec plusieurs sous-portefeuilles. Vous voulez parcourir **tous les instruments financiers individuels** (actions, obligations, ETF) sans vous soucier de la hiérarchie.
+Une banque doit afficher l'historique complet des transactions d'un client. Pour un client actif, cela peut représenter des **dizaines de milliers de transactions** sur plusieurs années.
 
-**Exemple** :
-```
-Portefeuille Principal
-├── Portfolio Tech
-│   ├── Action AAPL
-│   └── Action MSFT
-├── Portfolio Obligations
-│   ├── Obligation FR-BOND
-│   └── Obligation CORP
-└── ETF SP500
+**Problème** : Chaque transaction contient des informations répétitives :
+- **TypeOperation** : DEPOT, RETRAIT, VIREMENT (3 valeurs possibles seulement)
+- **Devise** : EUR, USD, GBP (quelques devises seulement)
+- **Canal** : AGENCE, DISTRIBUTEUR, INTERNET, MOBILE (4 canaux possibles)
+- **Statut** : EN_COURS, COMPLETE, ANNULEE (3 statuts possibles)
 
-Parcours plat attendu :
-1. Action AAPL
-2. Action MSFT
-3. Obligation FR-BOND
-4. Obligation CORP
-5. ETF SP500
-```
+Si on crée un nouvel objet pour chaque de ces attributs, **on gaspille énormément de mémoire**. Pour 100,000 transactions, on créerait potentiellement 400,000 objets alors qu'on pourrait n'en créer que 13 !
+
+### 🔍 Principe du Pattern Flyweight
+
+Le pattern Flyweight permet de **partager efficacement les objets immuables** identiques. On distingue :
+- **Données intrinsèques** (partagées) : TypeOperation, Devise, Canal, Statut
+- **Données extrinsèques** (uniques) : ID transaction, montant, date, comptes source/destination
 
 ### ✏️ Tâches
 
-Créez la classe `PortfolioIterator` dans le package `com.bank.patterns.iterator`
+#### Étape 1 : Créer les classes Flyweight (données intrinsèques)
 
-**Caractéristiques :**
-- Utilise une `Stack<InvestmentComponent>` pour le parcours en profondeur
-- Initialisation : empiler la racine
-- `next()` :
-  - Dépiler un élément
-  - Si c'est un Portfolio : empiler ses enfants et continuer (ne pas le retourner)
-  - Si c'est un instrument : le retourner
-- **Important** : Ne retourne que les feuilles (instruments), pas les portfolios
+Créez dans le package `com.bank.patterns.flyweight` les classes suivantes :
 
-**Structure suggérée :**
+**1. TypeOperation.java**
+- Attributs : `String code`, `String libelle`
+- Constructeur : `TypeOperation(String code, String libelle)`
+- Getters uniquement (classe **immuable**)
+- Exemples : DEPOT ("Dépôt"), RETRAIT ("Retrait"), VIREMENT ("Virement")
+
+**2. Devise.java**
+- Attributs : `String code`, `String symbole`
+- Constructeur : `Devise(String code, String symbole)`
+- Getters uniquement
+- Exemples : EUR ("€"), USD ("$"), GBP ("£")
+
+**3. Canal.java**
+- Attributs : `String code`, `String description`
+- Constructeur : `Canal(String code, String description)`
+- Getters uniquement
+- Exemples : AGENCE ("Agence bancaire"), DISTRIBUTEUR ("Distributeur automatique")
+
+**4. Statut.java**
+- Attributs : `String code`, `String description`
+- Constructeur : `Statut(String code, String description)`
+- Getters uniquement
+- Exemples : COMPLETE ("Opération complétée"), EN_COURS ("En cours de traitement")
+
+**⚠️ IMPORTANT** : Ces classes doivent être **immuables** (pas de setters, attributs final).
+
+#### Étape 2 : Créer les Flyweight Factories
+
+Créez les factories pour gérer le cache des flyweights :
+
+**1. TypeOperationFactory.java**
 ```java
-public class PortfolioIterator {
-    private Stack<InvestmentComponent> stack = new Stack<>();
+public class TypeOperationFactory {
+    private final Map<String, TypeOperation> cache = new HashMap<>();
 
-    public PortfolioIterator(InvestmentComponent root) {
-        stack.push(root);
+    public TypeOperation getTypeOperation(String code) {
+        // Si existe dans cache, retourner l'instance existante
+        // Sinon, créer une nouvelle instance et la mettre en cache
+        // Retourner l'instance (partagée)
     }
 
-    public boolean hasNext() {
-        // Vérifier s'il reste des éléments à traiter
-        // Peut nécessiter de "sauter" les portfolios pour trouver le prochain instrument
-        return !stack.isEmpty();
-    }
-
-    public InvestmentComponent next() {
-        // Algorithme :
-        while (!stack.isEmpty()) {
-            InvestmentComponent current = stack.pop();
-
-            // Si c'est un Portfolio, ajouter ses enfants à la pile
-            if (current instanceof Portfolio) {
-                List<InvestmentComponent> children = current.getChildren();
-                // Ajouter en ordre inverse pour préserver l'ordre
-                for (int i = children.size() - 1; i >= 0; i--) {
-                    stack.push(children.get(i));
-                }
-                // Ne pas retourner le portfolio, continuer la boucle
-            } else {
-                // C'est un instrument (Action, Obligation, ETF)
-                return current;
-            }
-        }
-        throw new NoSuchElementException("No more instruments");
+    public int getNombreFlyweights() {
+        // Retourne le nombre d'objets dans le cache
     }
 }
 ```
 
-**Utilisation :**
+**Indices** :
+- Utilisez `Map.computeIfAbsent()` pour une implémentation élégante
+- Ou bien `get()` + `if (null)` + `put()` pour une approche classique
+
+**2. DeviseFactory.java**
+- Même structure que TypeOperationFactory
+
+**3. CanalFactory.java**
+- Même structure que TypeOperationFactory
+
+**4. StatutFactory.java**
+- Même structure que TypeOperationFactory
+
+**Bonus** : Ajoutez des compteurs `cacheHits` et `cacheMisses` pour les statistiques.
+
+#### Étape 3 : Créer la classe Transaction avec Flyweights
+
+Créez la classe `BankTransactionLog` qui utilise les flyweights :
+
+**Attributs** :
+- Flyweights (références partagées) :
+  - `TypeOperation typeOperation`
+  - `Devise devise`
+  - `Canal canal`
+  - `Statut statut`
+
+- Données extrinsèques (uniques) :
+  - `String id`
+  - `String compteSource`
+  - `String compteDestination`
+  - `BigDecimal montant`
+  - `LocalDateTime dateOperation`
+  - `String libelle`
+
+**Constructeur** :
 ```java
-// Créer un portefeuille complexe avec sous-portefeuilles
-Portfolio mainPortfolio = createComplexPortfolio();
-
-// Parcourir tous les instruments de manière plate
-PortfolioIterator iterator = new PortfolioIterator(mainPortfolio);
-
-System.out.println("=== Tous les instruments (parcours plat) ===");
-while (iterator.hasNext()) {
-    InvestmentComponent instrument = iterator.next();
-    System.out.println(instrument.getDescription());
+public BankTransactionLog(String id, TypeOperation typeOperation, Devise devise,
+                          Canal canal, Statut statut, String compteSource,
+                          String compteDestination, BigDecimal montant,
+                          LocalDateTime dateOperation, String libelle) {
+    // Stocker les références vers les flyweights
+    this.typeOperation = typeOperation;
+    this.devise = devise;
+    // ... autres attributs
 }
-
-// Résultat : uniquement les instruments individuels,
-// pas les portfolios intermédiaires
 ```
 
-**Extension (optionnelle) :**
-- Ajoutez une méthode `reset()` pour recommencer le parcours depuis le début
-- Ajoutez un filtre pour ne retourner que certains types (ex: uniquement les actions)
+**Méthodes** :
+- Getters pour tous les attributs
+- `String afficher()` : retourne une représentation formatée de la transaction
+
+#### Étape 4 : Créer le TransactionLogManager
+
+Créez la classe `TransactionLogManager` qui gère la création des transactions :
+
+**Attributs** :
+```java
+private List<BankTransactionLog> transactions = new ArrayList<>();
+private TypeOperationFactory typeOpFactory = new TypeOperationFactory();
+private DeviseFactory deviseFactory = new DeviseFactory();
+private CanalFactory canalFactory = new CanalFactory();
+private StatutFactory statutFactory = new StatutFactory();
+```
+
+**Méthodes** :
+```java
+public void ajouterTransaction(String id, String typeOpCode, String deviseCode,
+                               String canalCode, String statutCode,
+                               String compteSource, String compteDestination,
+                               BigDecimal montant, LocalDateTime date, String libelle) {
+    // 1. Récupérer les flyweights via les factories
+    TypeOperation typeOp = typeOpFactory.getTypeOperation(typeOpCode);
+    Devise devise = deviseFactory.getDevise(deviseCode);
+    Canal canal = canalFactory.getCanal(canalCode);
+    Statut statut = statutFactory.getStatut(statutCode);
+
+    // 2. Créer la transaction avec les flyweights
+    BankTransactionLog transaction = new BankTransactionLog(
+        id, typeOp, devise, canal, statut,
+        compteSource, compteDestination, montant, date, libelle
+    );
+
+    // 3. Ajouter à la liste
+    transactions.add(transaction);
+}
+
+public void afficherResume() {
+    // Afficher le nombre de transactions
+    // Afficher le nombre de flyweights créés pour chaque type
+}
+
+public void afficherStatistiques() {
+    // Afficher les cache hits/misses
+    // Calculer le taux de réutilisation
+}
+```
+
+#### Étape 5 : Créer la démonstration
+
+Créez `FlyweightDemo.java` qui démontre :
+
+1. **Création du TransactionLogManager**
+
+2. **Chargement de nombreuses transactions** (au moins 1000 pour observer l'effet)
+   - Variez les types d'opérations
+   - Utilisez plusieurs devises
+   - Utilisez différents canaux et statuts
+   - Générez des montants et dates aléatoires
+
+3. **Comparaison SANS vs AVEC Flyweight** :
+   - Calculez l'estimation de mémoire sans flyweight : `nbTransactions * 4 objets par transaction`
+   - Affichez le nombre réel de flyweights créés
+   - Calculez le gain : `(objets_sans - objets_avec) / objets_sans * 100`
+
+4. **Affichage des statistiques** :
+   - Nombre de flyweights par type
+   - Taux de réutilisation (cache hits vs misses)
+
+5. **Démonstration du partage** :
+   - Vérifiez que deux transactions avec le même type partagent la même instance
+   ```java
+   BankTransactionLog tx1 = transactions.get(0);
+   BankTransactionLog tx2 = transactions.get(1);
+   boolean sameInstance = (tx1.getTypeOperation() == tx2.getTypeOperation());
+   ```
+
+**Exemple de sortie attendue** :
+```
+=== JOURNAL DE TRANSACTIONS BANCAIRES ===
+Nombre de transactions chargées : 10,000
+
+SANS Flyweight :
+  - Objets créés : 40,000 (10,000 transactions × 4 objets chacune)
+
+AVEC Flyweight :
+  - Transactions créées : 10,000
+  - TypeOperation flyweights : 3
+  - Devise flyweights : 3
+  - Canal flyweights : 4
+  - Statut flyweights : 3
+  - Total flyweights : 13
+  - Gain mémoire : 99.97% d'objets en moins !
+
+Statistiques de cache :
+  - TypeOperation : 9,997 hits, 3 misses (99.97% réutilisation)
+  - Devise : 9,997 hits, 3 misses
+  - Canal : 9,996 hits, 4 misses
+  - Statut : 9,997 hits, 3 misses
+```
 
 ### 🎓 Points d'apprentissage
-- Combinaison de deux patterns (Composite + Iterator)
-- Parcours en profondeur avec Stack
-- Algorithme itératif vs récursif
-- Filtrage des types pendant le parcours
+- Flyweight réduit drastiquement la consommation mémoire
+- Distinction entre données intrinsèques (partagées) et extrinsèques (uniques)
+- Les flyweights doivent être **immuables**
+- Utilisation de factories pour gérer le cache
+- Pattern très utile quand on a beaucoup d'objets avec des données répétitives
+- Trade-off : légère complexité en échange de gros gains mémoire
+
+### 💡 Points de discussion
+1. **Quand utiliser Flyweight ?** Quand on a beaucoup d'objets similaires (> 1000) avec données répétitives
+2. **Pourquoi l'immuabilité ?** Si un objet change, toutes les références seraient affectées !
+3. **Flyweight vs Singleton ?** Singleton = 1 instance unique. Flyweight = quelques instances partagées
+4. **Performance** : Légère surcharge au premier accès (création), puis accès instantané (cache)
 
 ### ✅ Critères de validation
-- [ ] Parcourt tous les instruments de manière plate
-- [ ] Ne retourne pas les portfolios intermédiaires
-- [ ] Utilise une Stack pour le parcours en profondeur
-- [ ] Fonctionne avec des hiérarchies de profondeur arbitraire
+- [ ] Classes flyweight créées (TypeOperation, Devise, Canal, Statut) et immuables
+- [ ] 4 factories créées avec cache
+- [ ] BankTransactionLog utilise des références vers les flyweights
+- [ ] TransactionLogManager coordonne la création
+- [ ] Démonstration montre le gain de mémoire (> 95%)
+- [ ] Statistiques de cache (hits/misses) fonctionnent
+- [ ] Vérification que les instances sont bien partagées (==)
+
+---
+
+## Exercice 4 : Pattern Memento (2h)
+
+### 🎯 Objectif
+Implémenter un système de sauvegarde et restauration d'états pour les comptes bancaires, permettant d'annuler des opérations et de conserver un historique complet des modifications.
+
+### 📋 Contexte
+Une banque souhaite offrir à ses clients premium la possibilité de **revenir en arrière** sur certaines opérations bancaires. De plus, le système doit conserver un **audit trail complet** de tous les changements d'état d'un compte.
+
+**Cas d'usage** :
+- Un client effectue une série d'opérations et réalise une erreur
+- Il peut restaurer l'état du compte à un point antérieur
+- La banque doit garder une trace de tous les états précédents pour l'audit
+- Le système doit protéger l'encapsulation : les états sauvegardés ne doivent pas être modifiables
+
+### 🔍 Principe du Pattern Memento
+
+Le pattern Memento permet de **capturer et externaliser l'état interne** d'un objet sans violer l'encapsulation, afin de pouvoir restaurer cet état ultérieurement.
+
+**Trois rôles** :
+1. **Originator** (BankAccount) : L'objet dont on veut sauvegarder l'état
+2. **Memento** (AccountMemento) : Stocke l'état de l'Originator
+3. **Caretaker** (AccountHistory) : Gère les mementos (historique)
+
+### ✏️ Tâches
+
+#### Étape 1 : Créer la classe Memento
+
+Créez la classe `AccountMemento` dans le package `com.bank.patterns.memento` :
+
+**Caractéristiques** :
+- Classe **immuable** qui stocke une copie de l'état d'un compte
+- Attributs :
+  ```java
+  private final String accountNumber;
+  private final double balance;
+  private final String status;
+  private final double overdraftLimit;
+  private final LocalDateTime timestamp;  // Moment de la sauvegarde
+  private final String description;        // Description de l'état
+  ```
+
+**Méthodes** :
+- Constructeur qui initialise tous les attributs
+- Getters uniquement (pas de setters - immuabilité)
+- `String getInfo()` : retourne une description lisible de l'état
+
+**Indices** :
+```java
+public class AccountMemento {
+    private final String accountNumber;
+    private final double balance;
+    private final String status;
+    private final double overdraftLimit;
+    private final LocalDateTime timestamp;
+    private final String description;
+
+    // Constructeur package-private : seul BankAccount peut créer des mementos
+    AccountMemento(String accountNumber, double balance, String status,
+                   double overdraftLimit, String description) {
+        this.accountNumber = accountNumber;
+        this.balance = balance;
+        this.status = status;
+        this.overdraftLimit = overdraftLimit;
+        this.timestamp = LocalDateTime.now();
+        this.description = description;
+    }
+
+    // Getters package-private : seul BankAccount peut lire les détails
+    String getAccountNumber() { return accountNumber; }
+    double getBalance() { return balance; }
+    String getStatus() { return status; }
+    double getOverdraftLimit() { return overdraftLimit; }
+
+    // Méthodes publiques pour l'information
+    public LocalDateTime getTimestamp() { return timestamp; }
+    public String getDescription() { return description; }
+
+    public String getInfo() {
+        return String.format("[%s] %s - Solde: %.2f EUR - Statut: %s",
+            timestamp.format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")),
+            description, balance, status);
+    }
+}
+```
+
+**⚠️ IMPORTANT** : Les getters détaillés (`getBalance()`, etc.) sont **package-private** pour que seul `BankAccount` puisse y accéder. Cela protège l'encapsulation.
+
+#### Étape 2 : Modifier BankAccount pour supporter Memento
+
+Ajoutez des méthodes à la classe `BankAccount` (ou créez une classe `MementoBankAccount` qui étend `BankAccount`) :
+
+**Méthodes à ajouter** :
+
+**1. createMemento()** - Créer un snapshot de l'état actuel
+```java
+public AccountMemento createMemento(String description) {
+    return new AccountMemento(
+        this.accountNumber,
+        this.balance,
+        this.status,
+        this.overdraftLimit,
+        description
+    );
+}
+```
+
+**2. restoreFromMemento()** - Restaurer l'état depuis un memento
+```java
+public void restoreFromMemento(AccountMemento memento) {
+    // Vérifier que c'est bien le bon compte
+    if (!this.accountNumber.equals(memento.getAccountNumber())) {
+        throw new IllegalArgumentException(
+            "Impossible de restaurer : le memento appartient à un autre compte"
+        );
+    }
+
+    // Restaurer l'état
+    this.balance = memento.getBalance();
+    this.status = memento.getStatus();
+    this.overdraftLimit = memento.getOverdraftLimit();
+
+    System.out.println("Compte restauré à l'état : " + memento.getDescription());
+}
+```
+
+#### Étape 3 : Créer le Caretaker (Gestionnaire d'historique)
+
+Créez la classe `AccountHistory` qui gère l'historique des mementos :
+
+**Attributs** :
+```java
+private final List<AccountMemento> history = new ArrayList<>();
+private int currentPosition = -1;  // Position actuelle dans l'historique
+```
+
+**Méthodes** :
+
+**1. save()** - Sauvegarder un nouvel état
+```java
+public void save(AccountMemento memento) {
+    // Si on n'est pas à la fin de l'historique, supprimer les états "futurs"
+    if (currentPosition < history.size() - 1) {
+        history.subList(currentPosition + 1, history.size()).clear();
+    }
+
+    // Ajouter le nouveau memento
+    history.add(memento);
+    currentPosition++;
+
+    System.out.println("État sauvegardé : " + memento.getDescription());
+}
+```
+
+**2. undo()** - Revenir à l'état précédent
+```java
+public AccountMemento undo() {
+    if (currentPosition <= 0) {
+        System.out.println("Impossible de revenir en arrière : début de l'historique");
+        return null;
+    }
+
+    currentPosition--;
+    return history.get(currentPosition);
+}
+```
+
+**3. redo()** - Avancer à l'état suivant
+```java
+public AccountMemento redo() {
+    if (currentPosition >= history.size() - 1) {
+        System.out.println("Impossible d'avancer : fin de l'historique");
+        return null;
+    }
+
+    currentPosition++;
+    return history.get(currentPosition);
+}
+```
+
+**4. Methods complémentaires** :
+```java
+public void showHistory() {
+    System.out.println("\n=== HISTORIQUE DES ÉTATS ===");
+    for (int i = 0; i < history.size(); i++) {
+        String marker = (i == currentPosition) ? " <-- ACTUEL" : "";
+        System.out.println(i + ". " + history.get(i).getInfo() + marker);
+    }
+}
+
+public AccountMemento getCurrent() {
+    return currentPosition >= 0 ? history.get(currentPosition) : null;
+}
+
+public int getHistorySize() {
+    return history.size();
+}
+
+public boolean canUndo() {
+    return currentPosition > 0;
+}
+
+public boolean canRedo() {
+    return currentPosition < history.size() - 1;
+}
+```
+
+#### Étape 4 : Créer la démonstration
+
+Créez `MementoDemo.java` qui démontre :
+
+1. **Création d'un compte avec état initial**
+   ```java
+   BankAccount compte = new BankAccount(...);
+   AccountHistory history = new AccountHistory();
+
+   // Sauvegarder l'état initial
+   history.save(compte.createMemento("État initial"));
+   ```
+
+2. **Effectuer des opérations en sauvegardant après chacune**
+   ```java
+   // Dépôt
+   compte.setBalance(compte.getBalance() + 1000);
+   history.save(compte.createMemento("Après dépôt de 1000 EUR"));
+
+   // Retrait
+   compte.setBalance(compte.getBalance() - 300);
+   history.save(compte.createMemento("Après retrait de 300 EUR"));
+
+   // Changement de statut
+   compte.setStatus("SUSPENDED");
+   history.save(compte.createMemento("Compte suspendu"));
+   ```
+
+3. **Démonstration de UNDO**
+   ```java
+   System.out.println("\n=== ANNULATION (UNDO) ===");
+   AccountMemento previous = history.undo();
+   if (previous != null) {
+       compte.restoreFromMemento(previous);
+   }
+   ```
+
+4. **Démonstration de REDO**
+   ```java
+   System.out.println("\n=== RÉTABLIR (REDO) ===");
+   AccountMemento next = history.redo();
+   if (next != null) {
+       compte.restoreFromMemento(next);
+   }
+   ```
+
+5. **Affichage de l'historique complet**
+   ```java
+   history.showHistory();
+   ```
+
+6. **Navigation dans l'historique**
+   - Faire plusieurs undo successifs
+   - Afficher l'état courant
+   - Faire une nouvelle opération après un undo (l'historique "futur" est supprimé)
+
+7. **Cas d'usage audit**
+   - Montrer comment parcourir tout l'historique pour un audit
+   - Exporter les états dans un log
+
+**Exemple de sortie attendue** :
+```
+=== DÉMONSTRATION DU PATTERN MEMENTO ===
+
+État initial sauvegardé
+Solde actuel : 1000.00 EUR
+
+--- Opération 1 : Dépôt de 500 EUR ---
+État sauvegardé : Après dépôt de 500 EUR
+Solde actuel : 1500.00 EUR
+
+--- Opération 2 : Retrait de 200 EUR ---
+État sauvegardé : Après retrait de 200 EUR
+Solde actuel : 1300.00 EUR
+
+--- Opération 3 : Suspension du compte ---
+État sauvegardé : Compte suspendu
+Statut actuel : SUSPENDED
+
+=== ANNULATION (UNDO) ===
+Compte restauré à l'état : Après retrait de 200 EUR
+Solde actuel : 1300.00 EUR
+Statut actuel : ACTIVE
+
+=== HISTORIQUE DES ÉTATS ===
+0. [2024-01-15 10:00:00] État initial - Solde: 1000.00 EUR - Statut: ACTIVE
+1. [2024-01-15 10:05:00] Après dépôt de 500 EUR - Solde: 1500.00 EUR - Statut: ACTIVE
+2. [2024-01-15 10:10:00] Après retrait de 200 EUR - Solde: 1300.00 EUR - Statut: ACTIVE <-- ACTUEL
+3. [2024-01-15 10:15:00] Compte suspendu - Solde: 1300.00 EUR - Statut: SUSPENDED
+```
+
+### 🎓 Points d'apprentissage
+- Memento permet de sauvegarder/restaurer l'état sans violer l'encapsulation
+- Utile pour undo/redo et audit trail
+- Le Memento est immuable pour éviter les modifications accidentelles
+- Visibilité package-private protège les détails internes
+- Distinction entre état public (info) et état privé (détails de restauration)
+- Trade-off : consommation mémoire si beaucoup de sauvegardes
+
+### 💡 Points de discussion
+1. **Memento vs Serialization ?** Memento offre plus de contrôle et protège mieux l'encapsulation
+2. **Gestion de la mémoire** : Comment limiter la taille de l'historique ? (ex: garder seulement les 50 derniers états)
+3. **Mementos delta** : Stocker seulement les différences au lieu de l'état complet
+4. **Thread safety** : Comment rendre l'historique thread-safe ?
+5. **Persistence** : Comment sauvegarder l'historique sur disque ?
+
+### ✅ Critères de validation
+- [ ] Classe AccountMemento créée et immuable
+- [ ] Getters détaillés en package-private
+- [ ] BankAccount supporte createMemento() et restoreFromMemento()
+- [ ] AccountHistory gère l'historique avec undo/redo
+- [ ] L'historique "futur" est supprimé lors d'une nouvelle opération après undo
+- [ ] showHistory() affiche tous les états avec marqueur de position
+- [ ] Démonstration complète avec scénarios undo/redo
+- [ ] Protection de l'encapsulation vérifiée
 
 ---
 
@@ -573,8 +1034,15 @@ Banking System - Session 2
 │   ├── AmountIterator
 │   ├── TypeIterator
 │   └── DateRangeIterator
-└── Exercice Bonus: Composite + Iterator
-    └── PortfolioIterator (parcours plat d'un arbre)
+├── Exercice 3: Flyweight (optimisation mémoire)
+│   ├── TypeOperation, Devise, Canal, Statut (Flyweights)
+│   ├── TypeOperationFactory, DeviseFactory, etc. (Factories)
+│   ├── BankTransactionLog (utilise les flyweights)
+│   └── TransactionLogManager (coordonnateur)
+└── Exercice 4: Memento (undo/redo et audit)
+    ├── AccountMemento (stocke l'état)
+    ├── BankAccount (Originator)
+    └── AccountHistory (Caretaker)
 ```
 
 ### Métriques de réussite
@@ -582,10 +1050,11 @@ Banking System - Session 2
 À la fin de la Session 2, vous devriez avoir :
 - ✅ Pattern Composite implémenté avec calcul récursif et rendement pondéré
 - ✅ Pattern Iterator avec au moins 4 itérateurs personnalisés
+- ✅ Pattern Flyweight avec réduction mémoire > 95%
+- ✅ Pattern Memento avec undo/redo fonctionnel
 - ✅ Possibilité de parcourir les transactions de multiples façons
+- ✅ Système d'historique complet pour audit
 - ✅ Code client simple et découplé
-- ✅ Tests pour chaque itérateur
-- ✅ Bonus : Combinaison de Composite et Iterator
 
 ### Questions de révision
 
@@ -596,6 +1065,11 @@ Banking System - Session 2
 5. Quelle est la différence entre `java.util.Iterator` et votre `TransactionIterator` ?
 6. Pourquoi avoir ajouté `reset()` dans l'interface Iterator ?
 7. Comment calculer un rendement pondéré et pourquoi est-ce important ?
+8. Quelle est la différence entre Flyweight et Singleton ?
+9. Pourquoi les flyweights doivent-ils être immuables ?
+10. Quelle est la différence entre Memento et Serialization ?
+11. Comment limiter la consommation mémoire de l'historique dans Memento ?
+12. Dans quels cas Flyweight est-il vraiment utile ?
 
 ### Exercices supplémentaires (si temps disponible)
 
