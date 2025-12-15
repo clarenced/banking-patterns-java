@@ -1,6 +1,6 @@
 package com.bank.legacy.old;
 
-import com.bank.patterns.decorator2.FeeCalculator;
+import com.bank.legacy.applied.decorator2.FeeCalculator;
 
 import java.util.Date;
 
